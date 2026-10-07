@@ -288,6 +288,7 @@ log_brain_event(make_brain_event("anomaly", entity_id="CMP-01", ref_id="AN-001",
 | 2026-10-07 | Appended `"brain_manifest.json"` to `db.RAW_FILES` (additive, nothing renamed or reordered) | The Neural Brain needs the static structure (sources, neurons, synapses, scenario timeline) written by M1 |
 | 2026-10-07 | Appended `RECON_GAP_THRESHOLD = 0.10`, `REFRESH_MINUTES = 5`, `FRESHNESS_WARN_MINUTES = 15` to `config.py` | M2 flags reconciliation gaps (S5); the demo loop and stale-data badge need shared intervals |
 | 2026-10-07 | Added `neuron_metrics`, `source_status`, `data_quality` to `db.TABLE_COLUMNS` | The Neural Brain needs live per-neuron numbers and per-stream status; data-quality results must be stored and shown |
+| 2026-10-07 | Appended `FATIGUE_FREQ_UP`, `FATIGUE_CTR_DOWN`, `CPC_SPIKE_MIN`, `SKU_RECENT_DAYS`, `SKU_BASELINE_DAYS`, `PROFIT_BASE_FLOOR`, `MAD_SCALE` to `config.py` | M3 detectors need shared, documented thresholds (fatigue, CPC spike, 14/28-day site-conversion windows, robust-z scaling) so no module hard-codes them |
 
 ## 12. Assumptions
 

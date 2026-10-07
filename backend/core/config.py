@@ -173,3 +173,14 @@ def validate_config() -> None:
 RECON_GAP_THRESHOLD = 0.10  # |inflation_pct| above 10% = reconciliation gap; M3 raises attribution_inflation, M6 recommends server-side tracking
 REFRESH_MINUTES = 5  # auto-refresh interval for the demo loop
 FRESHNESS_WARN_MINUTES = 15  # last_synced older than this → stale warning badge
+
+# ---------------------------------------------------------------------------
+# 2.10 Detection (added for M3, additive)
+# ---------------------------------------------------------------------------
+FATIGUE_FREQ_UP = 0.30  # creative fatigue: frequency up more than 30%
+FATIGUE_CTR_DOWN = 0.20  # ... AND CTR down more than 20%
+CPC_SPIKE_MIN = 0.25  # channel CPC up more than 25%
+SKU_RECENT_DAYS = 14  # site-conversion checks use 14 recent days (slow-moving web behaviour; keeps a price change out of the baseline)
+SKU_BASELINE_DAYS = 28  # ... vs the 28 days before that
+PROFIT_BASE_FLOOR = 0.10  # % change base for profit = max(|baseline profit|, 10% of baseline spend)
+MAD_SCALE = 1.4826  # MAD → standard-deviation equivalent
