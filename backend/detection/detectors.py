@@ -19,7 +19,6 @@ window ratios are Σnumerator ÷ Σdenominator; windows end on the LAST date in 
 from __future__ import annotations
 
 import math
-import time
 from typing import Any
 
 import numpy as np
@@ -331,25 +330,16 @@ def detect_all() -> list[Anomaly]:
     return sorted(found, key=lambda a: (-abs(a.profit_impact), SEVERITY_RANK[a.severity], a.id))
 
 
-def _statistic(a: Anomaly) -> str:
-    if a.kind == "conversion_drop":
-        return f"t={a.z:.2f}"
-    if a.kind == "attribution_inflation":
-        return "—"
-    return f"z={a.z:.2f}"
+def main(argv: list[str] | None = None) -> None:
+    """CLI: run detection, persist, pulse the brain and print the alert table."""
+    import argparse
 
+    from backend.detection.runner import run_detection  # lazy: runner imports this module
 
-def main() -> None:
-    start = time.perf_counter()
-    alerts = detect_all()
-    elapsed = time.perf_counter() - start
-    print(f"{'ID':<7}{'kind':<23}{'entity':<10}{'change':>9}{'stat':>10}{'₹/day':>11}  {'severity':<9}direction")
-    for a in alerts:
-        print(f"{a.id:<7}{a.kind:<23}{a.entity_id:<10}{a.change_pct:>+9.1%}{_statistic(a):>10}"
-              f"{m.format_inr(a.profit_impact):>11}  {a.severity:<9}{a.detail['direction']}")
-    counts = {s: sum(a.severity == s for a in alerts) for s in ("high", "medium", "low")}
-    print(f"M3 OK · {len(alerts)} anomalies · {counts['high']} high · {counts['medium']} medium · "
-          f"{counts['low']} low · {elapsed:.1f}s")
+    parser = argparse.ArgumentParser(description="M3 anomaly & signal detection")
+    parser.add_argument("--no-brain-events", action="store_true", help="do not log Diagnose brain events")
+    args = parser.parse_args(argv)
+    run_detection(emit_brain_events=not args.no_brain_events)
 
 
 if __name__ == "__main__":

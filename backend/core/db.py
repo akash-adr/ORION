@@ -68,6 +68,15 @@ TABLE_COLUMNS: dict[str, list[str]] = {
         "status", "trust_score", "inflation_pct", "detail",
     ],
     "data_quality": ["check", "status", "affected_rows", "detail", "action"],  # one row per check
+    # --- added for M3 (additive): persisted detection results and Neural Brain alert targets ---
+    "anomalies": [  # one row per current anomaly
+        "id", "key", "kind", "entity_type", "entity_id", "label", "metric", "baseline", "recent", "change_pct",
+        "z", "profit_impact", "severity", "direction", "detail_json", "detected_at",
+    ],
+    "brain_alerts": [  # one row per brain target currently alerting
+        "target_id", "target_type", "anomaly_ids", "top_kind", "top_severity", "direction", "profit_impact",
+        "stock_locked", "message",
+    ],
 }
 
 # Raw files written by M1 into config.RAW_DIR
@@ -177,6 +186,8 @@ def default_state() -> dict:
         "calibration": {"factor": 1.0, "mape": None, "win_rate": None, "n": 0},
         "brain_events": [],
         "brain_event_seq": 0,
+        "active_anomalies": {},  # stable key → {id, kind, entity_id, severity, first_seen, last_seen, profit_impact}
+        "detection_quality": {},  # last evaluation against ground truth
     }
 
 

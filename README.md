@@ -289,6 +289,7 @@ log_brain_event(make_brain_event("anomaly", entity_id="CMP-01", ref_id="AN-001",
 | 2026-10-07 | Appended `RECON_GAP_THRESHOLD = 0.10`, `REFRESH_MINUTES = 5`, `FRESHNESS_WARN_MINUTES = 15` to `config.py` | M2 flags reconciliation gaps (S5); the demo loop and stale-data badge need shared intervals |
 | 2026-10-07 | Added `neuron_metrics`, `source_status`, `data_quality` to `db.TABLE_COLUMNS` | The Neural Brain needs live per-neuron numbers and per-stream status; data-quality results must be stored and shown |
 | 2026-10-07 | Appended `FATIGUE_FREQ_UP`, `FATIGUE_CTR_DOWN`, `CPC_SPIKE_MIN`, `SKU_RECENT_DAYS`, `SKU_BASELINE_DAYS`, `PROFIT_BASE_FLOOR`, `MAD_SCALE` to `config.py` | M3 detectors need shared, documented thresholds (fatigue, CPC spike, 14/28-day site-conversion windows, robust-z scaling) so no module hard-codes them |
+| 2026-10-07 | Added `anomalies`, `brain_alerts` to `db.TABLE_COLUMNS`; added `active_anomalies`, `detection_quality` to `default_state()` (old state files gain them via `load_state`) | M3 persists detection results, maps them onto brain targets (neuron / cluster / source), emits Diagnose pulses only for new or worsening anomalies, and stores the ground-truth evaluation for the "7/7 detected" badge |
 
 ## 12. Assumptions
 
@@ -564,6 +565,107 @@ SKU neurons combine paid metrics from their campaigns with organic sales: `profi
 - `POST /refresh` (M9) re-runs M2 → M3 → M6 → M7; every M2 run rewrites tables with `if_exists="replace"`, so refreshes are idempotent (verified by validate check 10).
 - `REFRESH_MINUTES = 5` drives the demo loop; `last_synced` older than `FRESHNESS_WARN_MINUTES = 15` shows a stale badge.
 - Scaling path: SQLite → DuckDB → Postgres/BigQuery by changing only M0 `db.py` (`connect`, `write_table`, `read_table`, `query`); connectors swap CSVs for APIs behind the same `fetch()`.
+
+---
+
+# Module 3 — Anomaly & Signal Detection
+
+> **Pitch line:** "Instead of a brand manager staring at dashboards, the engine scans every campaign, channel and product every cycle, and found all seven planted problems — including a positive spike to scale — ranked by rupees."
+
+M3 is the Neural Brain's **Diagnose lobe**. It watches every campaign, channel and SKU and raises a ranked alert (the M0 `Anomaly` shape) whenever efficiency, cost, conversion, stock or data quality shifts significantly, good **or** bad, with its ₹/day impact.
+
+```bash
+python -m backend.detection.detectors                    # detect, persist, pulse the brain, print the alerts
+python -m backend.detection.detectors --no-brain-events  # same, without touching state.json
+python -m backend.detection.validate                     # 15-point PASS/FAIL table (never touches the real state.json)
+python -m pytest -q                                      # M0–M3 tests (temp folders only)
+```
+
+## Why statistical detection, not ML
+
+We have **no labelled anomalies** and only **90 days per entity**, and every alert must say *what moved and by how much*. A trained model would be starved of data and could not explain itself. So M3 uses robust statistics and threshold rules behind two gates, and we can **prove** it works: it finds 7 of 7 planted problems (and still does on other random seeds). An Isolation Forest is a planned optional second-opinion layer for patterns the rules do not name; it would add a flag, never replace the explanation.
+
+## Method: recent vs baseline, two gates
+
+```
+ ◄────────── baseline: 21 days ──────────►◄─ recent: 7 days ─►
+ ├──────────────────────────────────────────┼────────────────┤► last date in the data
+ campaigns / channels / stock:  BASELINE_DAYS = 21  vs  RECENT_DAYS = 7
+
+ ◄───────────── baseline: 28 days ─────────────►◄──── recent: 14 days ────►
+ ├────────────────────────────────────────────────┼─────────────────────────┤► last date
+ SKU site conversion:           SKU_BASELINE_DAYS = 28 vs SKU_RECENT_DAYS = 14
+```
+
+Windows end on the **last date in the data**, never today. Window ratios are Σnumerator ÷ Σdenominator (Σclicks ÷ Σimpressions), never the mean of daily ratios.
+
+**Two gates**: an alert fires only if the change is **statistically significant** (|z| ≥ `Z_THRESHOLD` 2.5, or a Welch t-test for conversion) **and practically large** (≥ `MIN_PCT_CHANGE` 15%, or the detector's own size threshold). Significance alone flags noise on tiny campaigns; size alone flags random wiggles.
+
+- **Robust z-score** = `(mean(recent) − median(baseline)) ÷ MAD × √n_recent ÷ 2`, with `MAD = median(|baseline − median|) × 1.4826`. Median and MAD are not dragged around by one freak day, so a promotion-day spike in the baseline does not hide a real problem (tested). If MAD = 0 it falls back to 1% of the median.
+- **Welch's t-test** (scipy) for site conversion: purchases ÷ sessions per day is noisy and the two windows have different variances and sizes, so the unequal-variance test is the honest choice.
+
+## The 7 detectors
+
+| Kind | Level | Triggers when | ₹/day impact | Planted |
+|---|---|---|---|---|
+| creative_fatigue | campaign | frequency up > 30% **and** CTR down > 20% | Δ mean daily profit | S1 · CMP-01 |
+| metric_shift / positive_spike | campaign | \|z\| ≥ 2.5 **and** \|Δprofit ÷ max(\|baseline profit\|, 10% of baseline spend)\| ≥ 15%; falling = shift, rising = spike | Δ mean daily profit | S7 · CMP-10 (spike); S3 knock-on |
+| cpc_spike | channel | CPC up > 25% **and** z > 2.5 | Δ channel daily profit | S3 · Google |
+| stockout_risk | SKU | days of cover < 7 **and** ad spend > 0 | −(daily gross margin at risk) | S2 · SKU-B |
+| conversion_drop | SKU | site CVR down > 15% **and** Welch t < −2.5 (14 vs 28 days) | −(lost CVR × sessions × unit margin) | S6 · SKU-D |
+| attribution_inflation | channel | platform conversions > store orders by > 10% | 0 (a data issue) | S5 · Meta, Google |
+
+If creative fatigue fires for a campaign, the profit check is skipped for it (no duplicate alert).
+
+**Severity** = M0 `severity_from_impact` (loss > ₹25k/day high, > ₹8k medium, else low; gains are always low), except `stockout_risk` is always **high** and `attribution_inflation` always **medium**. **Ranking**: by |₹ impact| descending, ties by severity then id. IDs `AN-001…` follow detection order; the stable identity across runs is the key `kind:entity_id`.
+
+## Output of this run
+
+```
+ID     kind                   entity       change      stat      ₹/day  severity direction
+AN-005 stockout_risk          SKU-B        -80.4%   z=-2.50    -₹1.56L  high     loss
+AN-004 cpc_spike              google       +56.1%   z=28.25    -₹25.7k  high     loss
+AN-003 positive_spike         CMP-10      +631.0%    z=5.64     ₹13.7k  low      gain
+AN-006 conversion_drop        SKU-D        -18.5%   t=-3.79     -₹6.7k  low      loss
+AN-007 conversion_drop        SKU-J        -17.2%   t=-2.62     -₹6.4k  low      loss
+AN-002 metric_shift           CMP-02       -17.9%   z=-2.65     -₹3.1k  low      loss
+AN-001 creative_fatigue       CMP-01       -36.0%   z=-6.93     -₹2.8k  low      loss
+AN-008 attribution_inflation  meta         +22.1%         —         ₹0  medium   loss
+AN-009 attribution_inflation  google       +14.8%         —         ₹0  medium   loss
+```
+
+**Evaluation against the answer key**: 7/7 planted pairs found (recall 1.00), precision 0.89, one knock-on (`metric_shift` CMP-02, the profit hit from the Google CPC spike), and **one unplanted alert** (`conversion_drop` SKU-J: the viral TikTok creative brings cold traffic that converts worse, so site CVR falls 17% as sessions rise 57%; it is real, just not planted). The check allows up to 2 unexplained extras.
+
+## Edge cases
+
+| Case | How it is handled |
+|---|---|
+| Sale days / seasonality in the baseline | Median + MAD ignore a few extreme days; a 3-day sale does not inflate the baseline |
+| An event (e.g. the SKU-D price change) inside the baseline | Conversion uses a 14-day recent window vs the 28 days before it, so the change sits in the recent window, not the baseline; the matching event id is attached to the alert |
+| Near-zero baseline profit | % change uses `max(\|baseline profit\|, 10% of baseline spend)`, so a campaign near break-even does not report absurd percentages |
+| Duplicate alerts for one problem | Fatigue suppresses the profit check on the same campaign; one key per `kind:entity` |
+| Zero clicks or sessions | Ratios use `safe_div` / `max(den, 1)`: never inf, never a crash |
+| New creatives | `new_creative` and `creative_ids_recent` are attached to profit alerts so a spike is explained (CMP-10 → CR-10b) |
+| Over-sensitivity | Two gates + a robust statistic; small noisy campaigns (CMP-06, CMP-07) are *not* flagged even when their profit halves, because the change is not statistically significant |
+| Different data (seeds 7 and 123) | Regenerated and re-run in tests: all 7 pairs still found |
+
+## Neural Brain integration
+
+**`brain_alerts`** maps anomalies onto the brain, validated against `brain_manifest.json`:
+
+| Anomaly | Brain target |
+|---|---|
+| campaign anomaly | `neuron` = the campaign |
+| SKU anomaly | `neuron` = the SKU |
+| `stockout_risk` | the SKU neuron **plus** every promoting campaign neuron with `stock_locked = true` (lock icon: budget increases blocked); the lock carries no ₹ impact, so it is never triple-counted |
+| `cpc_spike` | `cluster` = the channel (the whole Google cluster glows) |
+| `attribution_inflation` | `source` = `meta_ads` / `google_ads`; never individual neurons (it is a data issue, already shown by trust rings) |
+
+Targets hit by several anomalies merge: `anomaly_ids` list, top = largest |₹ impact| (a stock lock wins), highest severity, summed own impact.
+
+**Diagnose pulses**: one `anomaly` brain event (region `diagnose`, path `ingest → diagnose`) per alert, but **only when the key is new, the severity got worse, or |₹ impact| grew by more than 25%** since last seen. A first run on fresh state logs one per alert; an immediate re-run logs none. Keys that stop firing are dropped from `active_anomalies` and listed as `resolved` (no event for resolved in this module). `emit_brain_events=False` logs nothing and leaves state untouched.
+
+**`detection_quality`** (in `state.json`) stores the answer-key evaluation and powers the "7/7 detected" badge.
 
 ---
 
