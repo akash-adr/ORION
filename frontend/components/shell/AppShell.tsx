@@ -42,7 +42,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-w-0 flex-col">
         <OfflineBanner />
         <TopBar />
-        <main className="flex-1 px-4 py-6 min-[1000px]:px-6 min-[1200px]:px-8">{children}</main>
+        <main className="min-w-0 flex-1 px-4 py-6 min-[1000px]:px-6 min-[1200px]:px-8">{children}</main>
       </div>
       <Toaster />
       {phase === "checking" && <div className="fixed inset-0 z-[100] bg-ink" aria-hidden />}

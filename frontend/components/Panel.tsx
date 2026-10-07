@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 export function Panel({ title, note, children, className, ...rest }: { title?: string; note?: string; children: React.ReactNode; className?: string } & React.HTMLAttributes<HTMLElement>) {
   return (
-    <section className={cn("panel p-4 min-[1200px]:p-5", className)} {...rest}>
+    <section className={cn("panel min-w-0 p-4 min-[1200px]:p-5", className)} {...rest}>
       {title && (
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <h2 className="text-base font-bold">{title}</h2>

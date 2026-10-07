@@ -10,4 +10,3 @@ export const KIND_ICON: Record<string, LucideIcon> = {
   metric_shift: Activity,
   attribution_inflation: Eye,
 };
-export const kindIcon = (kind: string): LucideIcon => KIND_ICON[kind] ?? Activity;

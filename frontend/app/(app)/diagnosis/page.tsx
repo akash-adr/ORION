@@ -13,7 +13,7 @@ import DecisionRow from "@/components/ledger/DecisionRow";
 import PageHeader from "@/components/PageHeader";
 import { EmptyState, LoadState, Panel } from "@/components/Panel";
 import { inr } from "@/lib/format";
-import { kindIcon } from "@/lib/kinds";
+import KindIcon from "@/components/KindIcon";
 import { kindDisplay } from "@/lib/names";
 import { useAnomalies, useDiagnosis, useRecommendations } from "@/lib/queries";
 import type { Anomaly } from "@/lib/types";
@@ -80,7 +80,6 @@ function Body() {
             <nav aria-label="Anomalies" className="panel p-2 min-[1000px]:sticky min-[1000px]:top-4 min-[1000px]:max-h-[calc(100vh-2rem)] min-[1000px]:overflow-y-auto">
               <ul>
                 {sorted.map((a) => {
-                  const KindIcon = kindIcon(a.kind);
                   const Arrow = a.profit_impact < 0 ? ArrowDown : ArrowUp;
                   const none = Math.abs(a.profit_impact) < 0.5;
                   return (
@@ -92,7 +91,7 @@ function Body() {
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="inline-flex items-center gap-1.5 text-sm font-semibold">
-                            <KindIcon className="size-3.5 text-fog" aria-hidden />
+                            <KindIcon kind={a.kind} className="size-3.5 text-fog" />
                             {kindDisplay(a.kind)}
                           </span>
                           {none ? (

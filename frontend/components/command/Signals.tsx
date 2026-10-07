@@ -5,7 +5,7 @@ import Link from "next/link";
 import AnomalyName from "@/components/AnomalyName";
 import { EmptyState, LoadState, Panel } from "@/components/Panel";
 import { inr, pct } from "@/lib/format";
-import { kindIcon } from "@/lib/kinds";
+import KindIcon from "@/components/KindIcon";
 import { kindDisplay } from "@/lib/names";
 import { useAnomalies, useBrainSnapshot } from "@/lib/queries";
 import type { Anomaly } from "@/lib/types";
@@ -32,7 +32,6 @@ export default function Signals() {
             <>
               <ul className="divide-y divide-line">
                 {ranked.map((a) => {
-                  const Icon = kindIcon(a.kind);
                   const none = Math.abs(a.profit_impact) < 0.5;
                   const gain = a.profit_impact > 0;
                   const c = cause(a, all);
@@ -40,7 +39,7 @@ export default function Signals() {
                     <li key={a.id}>
                       <Link href={`/diagnosis?anomaly=${a.id}`} className="grid grid-cols-[28px_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-0.5 rounded-lg py-2.5 hover:bg-slate-2/60">
                         <span className="mt-0.5 grid size-7 place-items-center rounded-lg border border-line bg-slate-2" aria-hidden>
-                          <Icon className="size-3.5 text-fog" />
+                          <KindIcon kind={a.kind} className="size-3.5 text-fog" />
                         </span>
                         <span className="min-w-0">
                           <AnomalyName a={a} className="text-sm" />
