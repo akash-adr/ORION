@@ -30,3 +30,15 @@ dist/
 *.pem
 .idea/
 .vscode/
+
+# M0 runtime data (never commit)
+data/engine.db
+data/state.json
+data/raw/*.csv
+data/raw/*.json
+.env
+__pycache__/
+.venv/
+.pytest_cache/
+node_modules/
+.next/
