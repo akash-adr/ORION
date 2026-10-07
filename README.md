@@ -289,6 +289,7 @@ log_brain_event(make_brain_event("anomaly", entity_id="CMP-01", ref_id="AN-001",
 | 2026-10-07 | Appended `RECON_GAP_THRESHOLD = 0.10`, `REFRESH_MINUTES = 5`, `FRESHNESS_WARN_MINUTES = 15` to `config.py` | M2 flags reconciliation gaps (S5); the demo loop and stale-data badge need shared intervals |
 | 2026-10-07 | Added `neuron_metrics`, `source_status`, `data_quality` to `db.TABLE_COLUMNS` | The Neural Brain needs live per-neuron numbers and per-stream status; data-quality results must be stored and shown |
 | 2026-10-07 | Appended `FATIGUE_FREQ_UP`, `FATIGUE_CTR_DOWN`, `CPC_SPIKE_MIN`, `SKU_RECENT_DAYS`, `SKU_BASELINE_DAYS`, `PROFIT_BASE_FLOOR`, `MAD_SCALE` to `config.py` | M3 detectors need shared, documented thresholds (fatigue, CPC spike, 14/28-day site-conversion windows, robust-z scaling) so no module hard-codes them |
+| 2026-10-07 | Appended `AGENT_MAX_STEPS`, `AGENT_MAX_TOKENS`, `AGENT_TOOL_RESULT_MAX_CHARS`, `AGENT_MAX_WORDS`, `CLAUDE_MODEL_DEFAULT` to `config.py`; added `.env.example` with `ANTHROPIC_API_KEY` and `CLAUDE_MODEL` | M8's AI agent needs bounded tool loops, answer length and a model default; the API key lives only in the git-ignored `.env` |
 | 2026-10-07 | Appended `MEASURE_WINDOW_DAYS`, `OUTCOME_BIAS_MEAN`, `OUTCOME_NOISE_SD`, `CALIBRATION_WINDOW`, `ROLLING_WINDOW`, `CALIBRATION_MIN`, `CALIBRATION_MAX`, `SEED_HISTORY_N`, `SEED_PRED_MIN`, `SEED_PRED_MAX`, `SEED_ERR_SD0`, `SEED_ERR_DECAY`, `SEED_BIAS0`, `SEED_BIAS_DECAY`, `SYNAPSE_BASE`, `SYNAPSE_GAIN`, `SYNAPSE_DECAY`, `SYNAPSE_MIN`, `SYNAPSE_MAX`, `SYNAPSE_GOOD_ERROR` to `config.py`; added `synapse_strength` to `default_state()` (old state files gain it via `load_state`) | M7 closes the loop: it measures outcomes, calibrates forecasts and strengthens or weakens the brain's synapses; none of these knobs may be hard-coded |
 | 2026-10-07 | Added `rec_signatures`, `launched_tests`, `data_fixes`, `last_build_at` to `default_state()` (old state files gain them via `load_state`) | M6's executor records launched test campaigns and applied data fixes (so rollback can undo them) and deduplicates recommendation pulses by signature |
 | 2026-10-07 | Appended `CONF_BASE`, `CONF_Z_WEIGHT`, `CONF_Z_CAP`, `CONF_UNC_WEIGHT`, `CONF_MAPE_WEIGHT`, `RISK_MEDIUM_SHIFT`, `URGENCY_BONUS`, `STOCKOUT_HORIZON_DAYS`, `STOCKOUT_AD_CUT`, `POSITIVE_SCALE_UP`, `PLAN_SCALE_THRESHOLD`, `PLAN_CUT_THRESHOLD`, `OPP_LAUNCH_N`, `OPP_IMPACT_HAIRCUT` to `config.py` | M6 turns alerts, causes, budget plans and opportunities into ranked decisions; confidence, risk, urgency and every action size must come from shared, documented knobs |
@@ -313,6 +314,9 @@ _(Team: add assumptions here as they are made.)_
 - **M5b R² holdout** is 0.20 (spec expected ≈ 0.16): folds range from −0.14 to 0.69, so it is a ranking signal only. Reported, not tuned.
 - **M7 outcomes are simulated** (fixed seed, always labelled `simulated: true`); the 12-outcome seeded history gives rolling MAPE 27.6% → 5.9% (the spec expected ≈ 26% → 5–10%) and a calibration factor of 1.014.
 - **M7 / M6 coupling:** M6's executor now sets an emit flag around the learning hooks and runs them *after* the approval pulse (so events read approve → learn). M6 tests that read "the last event" now look events up by type.
+- **M8 KPIs are daily averages:** `service.kpis` reports spend, revenue and profit as ₹/day averages over the period, with change = (recent − previous) ÷ |previous| (equal to M0 `change_pct` for a positive baseline, so a deepening loss reads as negative).
+- **M8 `causal` is a superset of the M0 CausalResult** (adds `units_change_pct`, `n_post`, `controls`, `ci_includes_zero`); `ci_low` / `ci_high` still bound `total_effect` (₹ over the post-period).
+- **M8 touched M7 minimally:** `learning_report()` is unchanged, but a pure `build_report(state)` and a read-only `preview_report()` were split out so the service layer can show the learning report without seeding or saving state.
 - **M1 weekly budget tests** use calendar weeks (Monday–Sunday) for the first 55 days; the last 35 days run at budget so detection baselines are clean.
 
 ## 13. Common mistakes
@@ -1170,6 +1174,118 @@ The loop is wired through M6's hooks: `on_executed` → `record_outcomes()`, `on
 ## Demo numbers
 
 Approving the top decision ("Protect stock · cut ads on Running Pro by 60%") records **predicted ₹53,566/day → actual ₹55,422/day (+3.5%)**, simulated, strengthens `CMP-03→SKU-B`, `CMP-04→SKU-B` and `CMP-05→SKU-B` by 0.25 each, and shifts the calibration window.
+
+---
+
+# Module 8 — AI Agent
+
+> **Pitch line:** "Ask it anything in plain English. It answers with the engine's own numbers — the AI explains, it never invents — and if the internet drops, the answers keep coming."
+
+M8 is the Neural Brain's **voice**. It answers questions using the engine's own tools and tells the UI which brain nodes the answer is about, so they can light up. It sits on a **read-only service layer** (`backend/api/service.py`) that the M9 HTTP API will reuse.
+
+```bash
+python -m backend.agent.agent "Why did Summer Sneakers drop?"   # one question
+python -m backend.agent.agent --demo [--rules]                   # the 7 demo questions (--rules forces the offline engine)
+python -m backend.agent.validate                                 # 13-point PASS/FAIL table (read-only: state.json byte-identical)
+python -m pytest -q                                              # M0–M8 tests (Claude is only ever mocked)
+```
+
+## Architecture
+
+```
+ question ──► answer() ──┬─ ANTHROPIC_API_KEY set ──► Claude tool-calling loop ──┐   any failure (no key, network, rate limit,
+                         │                             (max 6 rounds)            │   bad response) never reaches the UI:
+                         └─ no key / --rules ───────► rules engine ◄─────────────┘   it falls back to the rules engine
+                                        │
+                      8 read-only tools (backend/agent/agent.py)
+                                        │
+                      service layer (backend/api/service.py): kpis · anomalies · diagnosis · recommendations ·
+                                        │                     causal · channel_simulate · opportunities · reconciliation · learning
+                      M2 tables · M3 detectors · M4 / M4b diagnosis · M5 optimizer · M6 inbox · M7 learning
+                                        │
+              { answer, engine, tools_used, highlights, note, duration_ms }
+```
+
+## Tools
+
+| Tool | Backed by | Input | Use |
+|---|---|---|---|
+| `get_kpis` | `service.kpis` | — | overview, stock at risk, data trust |
+| `list_anomalies` | `service.anomalies` (M3) | — | what is wrong, ranked by ₹/day |
+| `explain_anomaly` | `service.diagnosis` (M4) | `anomaly_id` | the exact ₹/day waterfall and narrative for one anomaly |
+| `get_recommendations` | `service.recommendations` (M6) | — | the pending Decision Inbox |
+| `causal_price_effect` | `service.causal` (M4b) | `event_id?` | did a price change work (units, net margin, 95% interval) |
+| `simulate_channel_budget` | `service.channel_simulate` (M5) | `multipliers` e.g. `{"google": 1.2}` | read-only what-if on the response curves |
+| `get_opportunities` | `service.opportunities` (M5b) | — | where to grow next, with the model's honest R² |
+| `get_reconciliation` | `service.reconciliation` (M2) | — | platform-reported vs store-verified ROAS |
+
+Tool results are compact views (so they fit in 12,000 characters), serialised to JSON and truncated if longer. **Every tool is read-only.**
+
+## The system prompt and the "LLM never computes" rule
+
+> "You are the reasoning layer of a D2C advertising decision engine. Use tools for every number; never estimate or invent figures. Be concise (at most 120 words), lead with the answer, cite ₹ impacts per day, and end with one recommended action. Currency is INR (use ₹ with lakh/thousand formatting as given by the tools). You cannot execute changes; recommend that the user approve them in the Decision Inbox."
+
+The model's job is to choose tools and phrase the result; **every figure must come from a tool result**. The rules engine enforces this mechanically (below), and the Claude path is bounded to 6 tool rounds and 700 tokens; a failing tool is reported back to the model as a tool error rather than raised.
+
+## Rules engine (offline fallback)
+
+Keyword intent routing on the lowercase question, **first match wins** (an explicit "brief" request goes first):
+
+| Intent | Keywords | Tools used | Answer |
+|---|---|---|---|
+| explain | why · drop · fall · fell · explain · cause · down | list_anomalies, explain_anomaly, get_recommendations | M4 headline + top 3 factors ("Factor ₹X/day (Y%)") + the kind-specific sentence + one recommended action |
+| scale | scale · next · invest · opportunit · grow · where should | get_recommendations, get_opportunities | scale-up and launch items + top 3 predicted-POAS opportunities + the R² honesty line |
+| stock | stock · inventory · sell out · stockout | get_kpis, get_recommendations | days of cover + the protect-stock action |
+| reconciliation | roas · double · attribution · trust · real | get_reconciliation, get_kpis | true vs platform ROAS per channel and the over-reporting % |
+| price | price | causal_price_effect, get_recommendations | units vs counterfactual, net margin/day, 95% interval and whether it includes zero |
+| simulate | what if · simulate · increase · `+NN%` | simulate_channel_budget | profit before → after, POAS, stock warnings |
+| brief (default) | anything else, "brief", "today", "summary" | get_kpis, get_recommendations | 7-day profit, POAS, data trust, top actions |
+
+**Entity matching** (for "explain"): each anomaly's candidates are its label parts after the kind (channel, product, audience) plus its id; the score is the length of the longest candidate found in the question. Ties go to a **root cause over a knock-on** (so "Summer Sneakers" finds the creative fatigue, not the Google knock-on that also contains it, and "Google" finds the CPC spike), then to the larger ₹ impact. No match at all → the largest loss. Simulation questions parse channel names (none named → every channel) and a percentage (`+30%`, `30 percent`, `-10%`, "cut … 25%"; default +20%).
+
+## Safety and trust design
+
+- **No invented numbers.** Every ₹, % and decimal in a rules answer is produced by a formatter that records it (`Fmt`), from values taken from tool outputs; the validator asserts that every numeric token in every answer is in that registry (54 tokens across the seven demo answers).
+- **Read-only.** The agent can explain and simulate; it cannot execute, approve, reject or roll back. Execution stays in M6 behind its five guardrail layers. A test checks that no tool can reach those functions or any state write, and `state.json` is byte-identical after the whole validation run.
+- **Always labelled.** Every answer says which engine produced it: `claude`, `rules`, or `fallback (<ExceptionClass>)`, plus the note "Every number comes from an engine tool call."
+- **Secrets stay in `.env`** (git-ignored; `.env.example` has empty `ANTHROPIC_API_KEY` and `CLAUDE_MODEL`). The key is never logged or returned, and a fallback reports only the exception's class name, never its message.
+- **Graceful fallback.** No key, a bad key (a real run returned `fallback (AuthenticationError)` in about a second), no network, a rate limit, an empty or malformed reply, or a runaway tool loop all produce a normal rules answer. Even a bug in the rules engine returns a polite sentence, never an exception.
+
+## Neural Brain integration
+
+Every answer carries `highlights`: up to six brain targets (`neuron` for a campaign or SKU, `cluster` for a channel, `source` for a data stream), derived from the tool results the answer relies on via `service.brain_targets_for`. The UI lights those nodes and focuses the camera on them. **M8 emits no brain events and writes nothing**: asking a question never changes the engine.
+
+## Actual answers from the `--demo --rules` run
+
+**Why did ROAS drop for Summer Sneakers?**  
+Creative fatigue · Meta · Summer Sneakers · broad: daily profit fell by ₹2.8k. Largest driver: Click-through / creative (92% of the movement, ₹2.7k/day). Top factors: Click-through / creative -₹2.7k/day (92%), Conversion rate -₹192/day (7%), Budget change ₹46/day (2%). Frequency rose from 1.9 to 3.7 and click-through fell 36% — the audience has seen this creative too often. Recommended: Refresh creative & trim budget · Meta · Summer Sneakers · broad (₹24.2k/day) — approve it in the Decision Inbox.  
+*engine `rules` · highlights neuron:CMP-01 · 124 ms*
+
+**Is our ROAS real?**  
+Meta: platform ROAS 2.40 vs true 1.97 (over-reports conversions by 22%). Google: platform ROAS 3.18 vs true 2.77 (over-reports conversions by 15%). Amazon, TikTok, Programmatic match store orders. Overall data trust is 74%. Recommended: optimise the over-reporting channels on store-verified conversions (data-fix items in the Decision Inbox).  
+*engine `rules` · highlights source:meta_ads, source:google_ads · 12 ms*
+
+**What if Google +20%?**  
+Google +20%: spend ₹13.8k/day, profit -₹51.7k → -₹60.8k/day (-₹9.1k), POAS 0.83 → 0.81. Stock warning: this raises spend on CMP-04 where cover is short, so those increases would be blocked. Recommended: do not apply this blindly — it reduces profit; compare it with the Decision Inbox plan.  
+*engine `rules` · highlights cluster:google · 34 ms*
+
+**Where should I scale next?**  
+Scale under-funded high-margin campaigns: Meta · Trail Max · lookalike +50% (₹1.3k/day). Scale winner · TikTok · Gym Flex · broad: TikTok · Gym Flex · broad +15% (₹1.1k/day). Test next: Trail Max · Google · retargeting (predicted POAS 5.55); Trail Max · TikTok · retargeting (predicted POAS 4.82); Trail Max · Amazon · retargeting (predicted POAS 4.35). The model is a ranking signal, not a forecast (hold-out R² 0.20). Recommended: Launch test · Trail Max on Google (retargeting) (₹13.6k/day) from the Decision Inbox.  
+*engine `rules` · highlights neuron:CMP-07, neuron:CMP-10, neuron:SKU-C · 3 ms*
+
+**Give me today's brief**  
+Last 7 days: profit -₹51.7k/day (-49% vs the prior period), POAS 0.83, data trust 74%. Stock at risk: Running Pro (5.0 days). Top actions: Protect stock · cut ads on Running Pro by 60% (₹53.6k/day); Refresh creative & trim budget · Meta · Summer Sneakers · broad (₹24.2k/day); Review price & trim ads · Casual X (₹14.9k/day).  
+*engine `rules` · highlights neuron:SKU-B, neuron:CMP-03, neuron:CMP-04, neuron:CMP-05 · 10 ms*
+
+**Is Running Pro going to sell out?**  
+Running Pro has 5.0 days of cover left. Ads are still sending demand to it. Recommended: Protect stock · cut ads on Running Pro by 60% (₹53.6k/day) — approve it in the Decision Inbox; budget increases stay blocked until stock recovers.  
+*engine `rules` · highlights neuron:SKU-B · 10 ms*
+
+**Did the Casual X price rise work?**  
+Units moved -22% vs what would have happened anyway (synthetic control). Net margin effect is ₹2.1k/day (₹29.3k over 14 days; 95% interval -₹3.3k to ₹62.0k, includes zero). So the price rise has not demonstrably earned more profit. Recommended: Review price & trim ads · Casual X (₹14.9k/day) in the Decision Inbox.  
+*engine `rules` · highlights neuron:SKU-D · 49 ms*
+
+*Claude was not exercised in this run (no `ANTHROPIC_API_KEY` in `.env`); with a key, the same questions go through the tool-calling loop and fall back to the answers above on any failure.*
 
 ---
 

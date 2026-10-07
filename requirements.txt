@@ -3,3 +3,5 @@ numpy
 pytest
 scipy
 scikit-learn
+anthropic
+python-dotenv

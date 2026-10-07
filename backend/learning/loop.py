@@ -293,10 +293,23 @@ def rolling_mape(outcomes: list[dict], window: int = ROLLING_WINDOW) -> list[dic
 
 def learning_report() -> dict:
     """Everything the Learning page needs: outcomes (newest first), accuracy curve, cumulative profit, calibration,
-    synapse strengths and KPIs. Seeds the history on first use."""
+    synapse strengths and KPIs. Seeds the history on first use (and saves it)."""
     state = load_state()
     if _ensure_seeded(state):
         save_state(state)
+    return build_report(state)
+
+
+def preview_report() -> dict:
+    """The same report WITHOUT touching state.json: if the history is not seeded yet it is seeded in memory only.
+    Used by read-only callers (the API / AI agent)."""
+    state = load_state()
+    _ensure_seeded(state)  # mutates this in-memory copy only
+    return build_report(state)
+
+
+def build_report(state: dict) -> dict:
+    """Pure: the learning report for a given state dict."""
     outcomes = state["outcomes"]
     measurable = [o for o in outcomes if o["measurable"]]
     cumulative, total = [], 0.0

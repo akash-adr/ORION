@@ -267,3 +267,12 @@ SYNAPSE_DECAY = 0.15  # a loss-making outcome weakens it
 SYNAPSE_MIN = 0.5
 SYNAPSE_MAX = 3.0
 SYNAPSE_GOOD_ERROR = 0.25  # "good" = actual > 0 and |error| ≤ 25%
+
+# ---------------------------------------------------------------------------
+# 2.17 AI agent (added for M8, additive)
+# ---------------------------------------------------------------------------
+AGENT_MAX_STEPS = 6  # tool-calling rounds before the agent gives up and falls back
+AGENT_MAX_TOKENS = 700  # per Claude response
+AGENT_TOOL_RESULT_MAX_CHARS = 12000  # tool results are truncated to this many characters
+AGENT_MAX_WORDS = 120  # rules-engine answers are trimmed to this many words
+CLAUDE_MODEL_DEFAULT = "claude-sonnet-5-5"  # used when the CLAUDE_MODEL environment variable is not set
