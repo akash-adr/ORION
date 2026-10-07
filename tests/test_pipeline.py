@@ -75,3 +75,20 @@ def test_errors_are_typed(pipe):
         service.approve("REC-nope")
     with pytest.raises(ValueError):
         service.update_settings(autonomy="reckless")
+
+
+def test_meta_config_and_last_refresh(pipe):
+    cfg = service.meta_config()
+    assert _dumps(cfg)
+    assert cfg["detection"]["Z_THRESHOLD"] == config.Z_THRESHOLD and cfg["guardrails"]["CONFIDENCE_MAX"] == config.CONFIDENCE_MAX
+    assert cfg["loop"]["REFRESH_MINUTES"] == config.REFRESH_MINUTES and cfg["currency"] == "INR"
+    assert "ANTHROPIC_API_KEY" not in _dumps(cfg)
+    reset_state()
+    service.invalidate()
+    assert service.last_refresh() is None
+    res = service.refresh()
+    last = service.last_refresh()
+    assert last["ok"] is True and last["at"] and last["duration_ms"] == res["duration_ms"]
+    assert set(last["steps"]) == {"ingest", "detect", "diagnose", "optimize", "decide", "learn"}
+    assert all({"ok", "duration_ms", "events"} <= set(s) for s in last["steps"].values())
+    assert sum(s["events"] for s in last["steps"].values()) == last["events_logged"]

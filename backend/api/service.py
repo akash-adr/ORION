@@ -519,12 +519,14 @@ def refresh(emit_brain_events: bool = True) -> dict:
 
     def step(name: str, fn: Callable[[], Any]) -> None:
         t0 = time.perf_counter()
+        seq0 = load_state()["brain_event_seq"]
         try:
             results[name] = fn()
             steps[name] = {"ok": True, "duration_ms": round((time.perf_counter() - t0) * 1000, 1)}
         except Exception as exc:  # noqa: BLE001  one failing step must not stop the loop
             _log.exception("refresh step %s failed", name)
             steps[name] = {"ok": False, "duration_ms": round((time.perf_counter() - t0) * 1000, 1), "error": f"{type(exc).__name__}: {exc}"}
+        steps[name]["events"] = load_state()["brain_event_seq"] - seq0
 
     with STATE_LOCK:
         seq_before = load_state()["brain_event_seq"]
@@ -536,17 +538,41 @@ def refresh(emit_brain_events: bool = True) -> dict:
         step("decide", lambda: decisions_engine.refresh_decisions(load_state()["objective"], emit_brain_events=emit_brain_events))
         step("learn", lambda: record_outcomes(emit_brain_events=emit_brain_events))
         invalidate()
+        events = load_state()["brain_event_seq"] - seq_before
+        decide = results.get("decide") or {}
+        result = _clean({"ok": all(s["ok"] for s in steps.values()), "steps": steps, "auto_applied": decide.get("auto_applied", []),
+                         "outcomes_measured": len(results.get("learn") or []), "events_logged": events,
+                         "duration_ms": round((time.perf_counter() - started) * 1000, 1)})
         try:
             state = load_state()
             state["last_refresh_at"] = _ts()
+            state["last_refresh"] = {"at": state["last_refresh_at"], **{k: result[k] for k in ("ok", "steps", "auto_applied", "outcomes_measured", "events_logged", "duration_ms")}}
             save_state(state)
         except Exception:  # noqa: BLE001
-            _log.exception("could not record last_refresh_at")
-        events = load_state()["brain_event_seq"] - seq_before
-    decide = results.get("decide") or {}
-    return _clean({"ok": all(s["ok"] for s in steps.values()), "steps": steps, "auto_applied": decide.get("auto_applied", []),
-                   "outcomes_measured": len(results.get("learn") or []), "events_logged": events,
-                   "duration_ms": round((time.perf_counter() - started) * 1000, 1)})
+            _log.exception("could not record last_refresh")
+    return result
+
+
+def last_refresh() -> dict | None:
+    """The compact summary of the most recent loop run (None if it never ran)."""
+    return _clean(load_state().get("last_refresh"))
+
+
+_CONFIG_GROUPS = {
+    "detection": ("RECENT_DAYS", "BASELINE_DAYS", "Z_THRESHOLD", "MIN_PCT_CHANGE", "STOCK_COVER_RISK_DAYS", "SKU_RECENT_DAYS", "SKU_BASELINE_DAYS"),
+    "guardrails": ("AUTO_APPLY_MAX_SHIFT", "DAILY_CHANGE_CAP", "STOCK_SPEND_CAP_MULT", "RISK_HIGH_SHIFT", "RISK_HIGH_IMPACT", "RISK_MEDIUM_SHIFT",
+                   "CONFIDENCE_MIN", "CONFIDENCE_MAX"),
+    "optimizer": ("OVERSTOCK_COVER_DAYS", "LAUNCH_TEST_RESERVE", "OPP_TEST_BUDGET"),
+    "learning": ("CALIBRATION_WINDOW", "CALIBRATION_MIN", "CALIBRATION_MAX"),
+}
+
+
+def meta_config() -> dict:
+    """Read-only, non-secret engine settings (thresholds the UI explains), grouped; never environment values other than the refresh interval."""
+    out = {g: {k: getattr(config, k) for k in keys} for g, keys in _CONFIG_GROUPS.items()}
+    out["loop"] = {"REFRESH_MINUTES": config.REFRESH_MINUTES}
+    out["currency"] = config.CURRENCY
+    return _clean(out)
 
 
 # ---------------------------------------------------------------------------

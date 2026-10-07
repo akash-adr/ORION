@@ -32,7 +32,7 @@ ROUTES = [
     ("POST", "/decisions/{x}/rollback"), ("GET", "/audit"), ("POST", "/optimize"), ("POST", "/simulate"), ("POST", "/simulate/channels"),
     ("GET", "/curves"), ("GET", "/opportunities"), ("GET", "/learning"), ("GET", "/brain/manifest"), ("GET", "/brain/nodes"),
     ("GET", "/brain/snapshot"), ("GET", "/brain/events"), ("GET", "/brain/state"), ("POST", "/brain/replay"), ("GET", "/settings"),
-    ("POST", "/settings"), ("POST", "/ask"), ("POST", "/refresh"), ("POST", "/demo/reset"),
+    ("POST", "/settings"), ("GET", "/meta/config"), ("GET", "/loop/last"), ("POST", "/ask"), ("POST", "/refresh"), ("POST", "/demo/reset"),
 ]
 
 
@@ -178,7 +178,7 @@ def get_cases(ctx: Ctx) -> list[str]:
     return ["/health", "/kpis", "/kpis?period=30", "/trend", "/trend?days=14", "/channels", "/campaigns", "/sources", "/data-quality",
             "/anomalies", f"/anomalies/{aid}/diagnosis", f"/causal/{eid}", "/reconciliation", "/recommendations",
             "/recommendations?objective=clear_inventory", "/audit", "/curves", "/opportunities", "/learning", "/settings",
-            "/brain/manifest", "/brain/nodes", "/brain/snapshot", "/brain/events", "/brain/events?limit=5", "/brain/state"]
+            "/brain/manifest", "/brain/nodes", "/brain/snapshot", "/brain/events", "/brain/events?limit=5", "/brain/state", "/meta/config", "/loop/last"]
 
 
 def check_routes(ctx: Ctx):

@@ -1308,7 +1308,7 @@ Units moved -22% vs what would have happened anyway (synthetic control). Net mar
 
 Both servers call the same service functions with the same parameters, so they return identical JSON (proved by validation check 02).
 
-## Endpoints (33)
+## Endpoints (35)
 
 | Tag | Endpoint | Returns |
 |---|---|---|
@@ -1319,9 +1319,10 @@ Both servers call the same service functions with the same parameters, so they r
 | Optimizer | `POST /optimize` · `/simulate` · `/simulate/channels` · `GET /curves` · `/opportunities` | budget plans, what-ifs, response curves, ghost opportunities |
 | Learning | `GET /learning` | outcomes, accuracy, calibration, synapse strength |
 | Brain | `GET /brain/manifest` · `/brain/nodes` · `/brain/snapshot` · `/brain/events?since=&limit=` · `/brain/state` · `POST /brain/replay` | everything the 3D brain renders |
+| Settings | `GET /meta/config` | read-only engine thresholds (detection, guardrails, optimizer, learning, loop, currency) |
 | Settings | `GET/POST /settings` | autonomy, objective, refresh interval, `last_refresh_at`, `next_refresh_at`, `agent.claude_available` |
 | Agent | `POST /ask` | grounded answer + brain highlights |
-| Loop | `POST /refresh` · `POST /demo/reset` | run the loop now · reset the demo (DEMO_MODE only) |
+| Loop | `GET /loop/last` · `POST /refresh` · `POST /demo/reset` | last run summary (per-step ok / ms / events) · run the loop now · reset the demo (DEMO_MODE only) |
 
 Interactive docs: `/docs` (Swagger) and `/openapi.json`. Frontend polling plan, button map and real example JSON: [`frontend/README-API.md`](frontend/README-API.md).
 
