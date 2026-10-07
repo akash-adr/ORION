@@ -33,8 +33,8 @@ const NODES = [
   { label: "Inventory / ERP", angle: 252, heroAngle: 285, z: -0.3 },
 ] as const;
 const PER_NODE = 160;
-const IDLE_FLOW = 0.6; // stream intensity when idle: data always trickles into the Ingest lobe
-const INGEST_FLOW = 1; // full intensity while ingesting
+const IDLE_FLOW = 0; // streams are hidden outside the ingestion stage
+const INGEST_FLOW = 1; // full intensity while brainState is "ingesting"
 const BLUE = new Color(REGION_META.ingest.color);
 
 // Arc radii (brain-local units) when there is room; shrunk to fit the viewport otherwise.
