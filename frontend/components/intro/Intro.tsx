@@ -67,7 +67,7 @@ export default function Intro({ onDone }: { onDone: () => void }) {
   }, [loaded, step]);
 
   return (
-    <motion.div className="fixed inset-0 z-[100]" aria-label="Profit Pilot is loading" role="status" style={{ pointerEvents: assembling ? "none" : "auto" }}>
+    <motion.div className="fixed inset-0 z-[100]" aria-label="Margin Mind is loading" role="status" style={{ pointerEvents: assembling ? "none" : "auto" }}>
       <motion.div className="absolute inset-0" style={{ background: INK }} animate={{ opacity: assembling ? 0 : 1 }} transition={{ duration: 0.7, delay: 0.1 }} />
 
       <motion.div
@@ -82,9 +82,9 @@ export default function Intro({ onDone }: { onDone: () => void }) {
       <motion.div className="relative flex h-full max-w-[640px] flex-col justify-center px-8 min-[1200px]:px-16" animate={{ opacity: assembling ? 0 : 1 }} transition={{ duration: 0.35 }}>
         <div className="mb-8 flex items-center gap-2.5">
           <span className="grid size-8 place-items-center rounded-lg bg-[#3FC7E0] text-base font-extrabold text-[#08202a]" aria-hidden>
-            P
+            M
           </span>
-          <span className="text-xl font-extrabold tracking-tight text-[#E8ECF4]">Profit Pilot</span>
+          <span className="text-xl font-extrabold tracking-tight text-[#E8ECF4]">Margin Mind</span>
         </div>
         <h1 className="text-[40px] leading-[1.08] font-extrabold tracking-[-0.03em] text-[#E8ECF4]">The decision engine behind your ad spend</h1>
         <div className="mt-8 flex items-center gap-3 text-base text-[#8B97B0]" aria-live="polite">

@@ -1,4 +1,4 @@
-# Profit Pilot: the dashboard
+# Margin Mind: the dashboard
 
 The front end of the DataQuest 3.0 decision engine. Decisions first, proof one click away: every number on every screen comes from the engine's API and is labelled with its period (per day, last 7 days).
 

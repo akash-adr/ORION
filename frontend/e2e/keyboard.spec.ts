@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 const ROUTES = ["/command", "/neural", "/diagnosis", "/performance", "/performance?tab=products", "/data", "/simulator", "/opportunities", "/learning"];
 
 test("keyboard: every page is reachable by Tab and every focused element shows a focus indicator", async ({ page }) => {
-  await page.addInitScript(() => sessionStorage.setItem("pp-intro-shown", "1"));
+  await page.addInitScript(() => sessionStorage.setItem("mm-intro-shown", "1"));
   const problems: string[] = [];
   for (const route of ROUTES) {
     await page.goto(route);
@@ -41,7 +41,7 @@ test.describe("reduced motion", () => {
     page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
     await page.goto("/");
     await expect(page).toHaveURL(/\/command$/);
-    await expect(page.getByRole("status", { name: "Profit Pilot is loading" })).toHaveCount(0);
+    await expect(page.getByRole("status", { name: "Margin Mind is loading" })).toHaveCount(0);
     await page.goto("/neural");
     await page.waitForTimeout(4000);
     const anim = await page.evaluate(() => [...document.querySelectorAll(".neuron-alert")].map((e) => getComputedStyle(e).animationName));

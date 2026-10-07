@@ -1,5 +1,5 @@
 /**
- * API types for the Profit Pilot engine (M9 backend). Written from the REAL responses saved in lib/__samples__/.
+ * API types for the Margin Mind engine (M9 backend). Written from the REAL responses saved in lib/__samples__/.
  * Money is Indian rupees (INR). Dates are "YYYY-MM-DD"; timestamps are naive IST "YYYY-MM-DDTHH:MM:SS".
  * Any numeric field can be null when the engine could not compute it (NaN/Infinity never reach the wire).
  * Fractions are 0–1 (0.25 = 25%), never already multiplied by 100.

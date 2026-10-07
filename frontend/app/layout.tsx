@@ -9,7 +9,9 @@ const newsreader = Newsreader({ variable: "--font-newsreader", subsets: ["latin"
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Profit Pilot",
+  title: "Margin Mind",
+  applicationName: "Margin Mind",
+  openGraph: { siteName: "Margin Mind", title: "Margin Mind", description: "The decision engine behind your ad spend." },
   description: "The decision engine behind your ad spend.",
 };
 

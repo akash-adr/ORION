@@ -4,7 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 const ROUTES = ["/command", "/neural", "/diagnosis", "/performance", "/performance?tab=campaigns", "/performance?tab=products", "/data", "/simulator", "/opportunities", "/learning"];
 
 async function settle(page: Page) {
-  await page.addInitScript(() => sessionStorage.setItem("pp-intro-shown", "1"));
+  await page.addInitScript(() => sessionStorage.setItem("mm-intro-shown", "1"));
 }
 
 for (const theme of ["dark", "light"] as const) {

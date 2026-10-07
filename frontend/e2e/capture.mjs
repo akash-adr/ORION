@@ -13,7 +13,7 @@ for (const width of [1440, 900]) {
   for (const theme of ["dark", "light"]) {
     const ctx = await browser.newContext({ viewport: { width, height: 900 } });
     const page = await ctx.newPage();
-    await page.addInitScript(() => sessionStorage.setItem("pp-intro-shown", "1"));
+    await page.addInitScript(() => sessionStorage.setItem("mm-intro-shown", "1"));
     for (const [name, path] of PAGES) {
       await page.goto(BASE + path);
       await page.waitForTimeout(name.startsWith("neural") ? 9000 : 3500);

@@ -22,10 +22,10 @@ test("the whole demo, mouse only, with no console errors", async ({ page, reques
 
   await test.step("a. intro, skip, command", async () => {
     await page.goto("/");
-    await expect(page.getByRole("status", { name: "Profit Pilot is loading" })).toBeVisible();
+    await expect(page.getByRole("status", { name: "Margin Mind is loading" })).toBeVisible();
     await shot(page, "intro");
     await page.mouse.click(700, 450); // any click skips
-    await expect(page.getByRole("status", { name: "Profit Pilot is loading" })).toBeHidden({ timeout: 15_000 });
+    await expect(page.getByRole("status", { name: "Margin Mind is loading" })).toBeHidden({ timeout: 15_000 });
     await expect(page).toHaveURL(/\/command$/);
     await expect(page.getByRole("heading", { name: "Command", level: 1 })).toBeVisible();
   });

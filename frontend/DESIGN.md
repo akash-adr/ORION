@@ -1,4 +1,4 @@
-# Profit Pilot design contract
+# Margin Mind design contract
 
 Every later page follows this file. If a rule here and a page disagree, the page is wrong.
 

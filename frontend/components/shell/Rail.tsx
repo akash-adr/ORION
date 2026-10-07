@@ -66,11 +66,11 @@ export default function Rail() {
 
   return (
     <aside className="flex items-center gap-2 border-b border-line bg-slate px-3 py-2 min-[1000px]:sticky min-[1000px]:top-0 min-[1000px]:h-screen min-[1000px]:flex-col min-[1000px]:items-stretch min-[1000px]:gap-1 min-[1000px]:border-r min-[1000px]:border-b-0 min-[1000px]:p-3 max-[999px]:overflow-x-auto">
-      <Link href="/command" className="flex shrink-0 items-center gap-2.5 px-2 py-1.5 min-[1000px]:mb-4 min-[1000px]:max-[1199px]:justify-center min-[1000px]:max-[1199px]:px-0" aria-label="Profit Pilot, home">
+      <Link href="/command" className="flex shrink-0 items-center gap-2.5 px-2 py-1.5 min-[1000px]:mb-4 min-[1000px]:max-[1199px]:justify-center min-[1000px]:max-[1199px]:px-0" aria-label="Margin Mind, home">
         <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary text-[15px] font-extrabold text-primary-foreground" aria-hidden>
-          P
+          M
         </span>
-        <span className={cn("text-base font-extrabold tracking-tight", lab)}>Profit Pilot</span>
+        <span className={cn("text-base font-extrabold tracking-tight", lab)}>Margin Mind</span>
       </Link>
 
       <nav aria-label="Main" className="flex gap-1 min-[1000px]:flex-1 min-[1000px]:flex-col">

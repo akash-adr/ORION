@@ -7,7 +7,7 @@ import Rail from "./Rail";
 import Toaster from "./Toaster";
 import TopBar from "./TopBar";
 
-const INTRO_KEY = "pp-intro-shown";
+const INTRO_KEY = "mm-intro-shown";
 
 const noop = () => () => {};
 const readSeen = () => {
