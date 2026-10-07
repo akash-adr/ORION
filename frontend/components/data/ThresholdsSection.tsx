@@ -21,7 +21,7 @@ export default function ThresholdsSection() {
                     <div key={r.key} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4">
                       <dt className="text-sm font-semibold">{r.label}</dt>
                       <dd className="text-right text-sm font-bold whitespace-nowrap">{r.value}</dd>
-                      <p className="col-span-2 mt-0.5 text-sm text-fog">{r.explain}</p>
+                      <dd className="col-span-2 mt-0.5 text-sm text-fog">{r.explain}</dd>
                     </div>
                   ))}
                 </dl>

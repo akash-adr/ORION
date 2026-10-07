@@ -1,8 +1,10 @@
 "use client";
 
 import { LoaderCircle, Search, Send, X } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { ApiError } from "@/lib/api";
+import { parseCampaignName } from "@/lib/names";
 import { useAsk, useBrainSnapshot } from "@/lib/queries";
 import { useUiStore } from "@/lib/ui-store";
 import type { AskResult, BrainTarget } from "@/lib/types";
@@ -45,7 +47,13 @@ export default function AskBar() {
   };
 
   const label = (t: BrainTarget): string => {
-    if (t.type === "neuron") return snap?.nodes.find((n) => n.entity_id === t.id)?.label ?? t.id;
+    if (t.type === "neuron") {
+      const n = snap?.nodes.find((x) => x.entity_id === t.id);
+      if (!n) return t.id;
+      if (n.entity_type !== "campaign") return n.label;
+      const p = parseCampaignName(n.label);
+      return `${p.channelName} ${p.product}, ${p.audience}`;
+    }
     if (t.type === "cluster") return snap?.clusters.find((c) => c.id === t.id)?.label ?? t.id;
     if (t.type === "source") return snap?.sources.find((s) => s.id === t.id)?.label ?? t.id;
     return t.id;
@@ -61,7 +69,7 @@ export default function AskBar() {
           e.preventDefault();
           submit(q);
         }}
-        className="flex items-center gap-2 rounded-lg border border-line bg-slate-2 px-3 focus-within:border-synapse"
+        className="flex items-center gap-2 rounded-lg border border-line bg-slate-2 px-3 focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-synapse"
         role="search"
       >
         <Search className="size-4 shrink-0 text-fog" aria-hidden />
@@ -109,9 +117,15 @@ export default function AskBar() {
                   {result.highlights.length > 0 && (
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <span className="text-sm text-fog">Highlighted on the brain</span>
+                      {result.highlights.find((t) => t.type === "neuron") && (
+                        <Link href={`/neural?focus=${encodeURIComponent(result.highlights.find((t) => t.type === "neuron")!.id)}`} onClick={() => setOpen(false)} className="rounded-full bg-primary px-2.5 py-0.5 text-sm font-semibold text-primary-foreground hover:bg-primary/85">
+                          Show in neural view
+                        </Link>
+                      )}
                       {result.highlights.map((t) => (
                         <button
                           key={`${t.type}:${t.id}`}
+                          data-highlight={t.id}
                           onClick={() => setHighlights(highlights.some((h) => h.id === t.id) ? highlights.filter((h) => h.id !== t.id) : [...highlights, t])}
                           aria-pressed={highlights.some((h) => h.id === t.id)}
                           className="rounded-full border border-line px-2.5 py-0.5 text-sm hover:border-synapse aria-pressed:border-synapse aria-pressed:bg-slate-2"

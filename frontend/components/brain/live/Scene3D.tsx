@@ -2,65 +2,92 @@
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
-import { AdditiveBlending, Color, Group, Mesh, MeshBasicMaterial, PointsMaterial, Vector3 } from "three";
+import { AdditiveBlending, Color, Group, MathUtils, Mesh, MeshBasicMaterial, PointsMaterial, Vector3 } from "three";
 import type { BrainData } from "@/components/brain/brainData";
 import type { V3 } from "@/lib/brain/layout";
 import { useBrainPlayer } from "@/lib/brain/store";
 import { prefersReducedMotion, readToken } from "@/lib/brain/tokens";
-import type { RefMap } from "./NeuronOverlay";
+import type { ProjectionBus } from "@/lib/brain/types";
 
 const POOL = 6;
 const TONE_TOKEN = { loss: "--loss", gain: "--gain", risk: "--risk", synapse: "--synapse" } as const;
+/** How far the camera moves in when an item is focused (1 = overview). */
+const FOCUS_ZOOM = 1.9;
 
 interface Props {
   data: BrainData;
   maxDots: number;
+  /** every projected item, keyed as in lib/brain/layout `key` */
   positions: Map<string, V3>;
-  refs: React.RefObject<RefMap>;
-  /** capsule element, so tokens resolve inside the dark scope */
+  /** neuron positions by entity id, for pulse targets */
+  neuronById: Map<string, V3>;
+  bus: ProjectionBus;
   scope: React.RefObject<HTMLElement | null>;
   sway: boolean;
+  /** brain-space half-extent to fit in the view (bigger when sources float outside the cortex) */
+  fit: number;
+  /** key of the item the camera should ease toward, or null for the overview */
+  focusKey: string | null;
 }
 
-function Rig({ data, maxDots, positions, refs, scope, sway }: Props) {
+function Rig({ data, maxDots, positions, neuronById, bus, scope, sway, fit, focusKey }: Props) {
   const rig = useRef<Group>(null);
   const pool = useRef<(Mesh | null)[]>([]);
   const { camera, size } = useThree();
   const tmp = useMemo(() => new Vector3(), []);
   const colors = useRef(new Map<string, Color>());
   const reduce = useMemo(() => prefersReducedMotion(), []);
-
-  const dotPositions = useMemo(() => data.positions.slice(0, Math.min(maxDots, data.positions.length / 3) * 3), [data, maxDots]);
   const dotMaterial = useRef<PointsMaterial>(null);
+  const dotPositions = useMemo(() => data.positions.slice(0, Math.min(maxDots, data.positions.length / 3) * 3), [data, maxDots]);
+
   useEffect(() => {
     dotMaterial.current?.color.set(readToken("--fog", scope.current, "#8b97b0"));
   }, [scope]);
 
-  // Fit the brain (long axis spans [-1, 1]) to the panel for any aspect ratio.
   useEffect(() => {
     const aspect = size.width / Math.max(1, size.height);
-    const halfH = Math.max(0.62, 1.12 / Math.max(0.5, aspect));
+    const halfH = Math.max(fit * 0.62, (fit * 1.12) / Math.max(0.5, aspect));
     const dist = halfH / Math.tan((40 * Math.PI) / 360);
     camera.position.set(0, 0, dist);
     camera.lookAt(0, 0, 0);
     camera.updateProjectionMatrix();
-  }, [camera, size]);
+  }, [camera, size, fit]);
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock }, dt) => {
     const g = rig.current;
     if (!g) return;
-    g.rotation.y = sway && !reduce ? Math.sin(clock.elapsedTime * 0.16) * 0.16 : 0;
+    const focus = focusKey ? positions.get(focusKey) : undefined;
+    // Ease the whole brain so the focused item moves to the centre (about 500 ms; instant with reduced motion).
+    const s = focus ? FOCUS_ZOOM : 1;
+    const target = focus ? new Vector3(-focus[0] * s, -focus[1] * s, -focus[2] * s * 0.3) : new Vector3();
+    const k = reduce ? 1 : 1 - Math.exp(-dt * 8);
+    g.scale.setScalar(MathUtils.lerp(g.scale.x, s, k));
+    g.position.lerp(target, k);
+    g.rotation.y = sway && !reduce && !focus ? Math.sin(clock.elapsedTime * 0.16) * 0.16 : MathUtils.lerp(g.rotation.y, 0, k);
     g.updateMatrixWorld(true);
 
-    // Project every neuron to screen space and move its SVG group there.
+    const screen = new Map<string, { x: number; y: number }>();
     for (const [id, p] of positions) {
-      const el = refs.current.get(id);
-      if (!el) continue;
       tmp.set(p[0], p[1], p[2]).applyMatrix4(g.matrixWorld);
       const facing = tmp.z;
       tmp.project(camera);
-      el.setAttribute("transform", `translate(${((tmp.x * 0.5 + 0.5) * size.width).toFixed(1)} ${((1 - (tmp.y * 0.5 + 0.5)) * size.height).toFixed(1)})`);
-      el.style.opacity = facing > -0.05 ? "1" : "0.35";
+      const x = (tmp.x * 0.5 + 0.5) * size.width;
+      const y = (1 - (tmp.y * 0.5 + 0.5)) * size.height;
+      screen.set(id, { x, y });
+      const el = bus.els.get(id);
+      if (el) {
+        el.setAttribute("transform", `translate(${x.toFixed(1)} ${y.toFixed(1)})`);
+        el.style.opacity = facing > -0.05 ? "1" : "0.35";
+      }
+    }
+    for (const { el, a, b } of bus.lines.values()) {
+      const pa = screen.get(a);
+      const pb = screen.get(b);
+      if (!pa || !pb) continue;
+      el.setAttribute("x1", pa.x.toFixed(1));
+      el.setAttribute("y1", pa.y.toFixed(1));
+      el.setAttribute("x2", pb.x.toFixed(1));
+      el.setAttribute("y2", pb.y.toFixed(1));
     }
 
     // Pulses: a bright dot travelling region to region, then to the first target neuron.
@@ -80,7 +107,7 @@ function Rig({ data, maxDots, positions, refs, scope, sway }: Props) {
         if (c) pts.push(c);
       }
       for (const t of pulse.targets) {
-        const pos = positions.get(t);
+        const pos = neuronById.get(t);
         if (pos) {
           pts.push(new Vector3(pos[0], pos[1], pos[2]));
           break;
@@ -92,10 +119,8 @@ function Rig({ data, maxDots, positions, refs, scope, sway }: Props) {
       }
       const t = reduce ? 1 : Math.min(1, (now - pulse.startedAt) / (pulse.duration * 0.7));
       const f = t * (pts.length - 1);
-      const k = Math.min(pts.length - 2, Math.floor(f));
-      const a = pts[Math.max(0, k)];
-      const b = pts[Math.min(pts.length - 1, k + 1)];
-      mesh.position.lerpVectors(a, b, pts.length === 1 ? 0 : f - k);
+      const j = Math.min(pts.length - 2, Math.floor(f));
+      mesh.position.lerpVectors(pts[Math.max(0, j)], pts[Math.min(pts.length - 1, j + 1)], pts.length === 1 ? 0 : f - j);
       const fade = 1 - Math.max(0, (now - pulse.startedAt) / pulse.duration - 0.7) / 0.3;
       let col = colors.current.get(pulse.tone);
       if (!col) {

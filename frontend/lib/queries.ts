@@ -79,7 +79,18 @@ export const useLearning = () => useQuery({ queryKey: keys.learning, queryFn: ap
 export const useSettings = () => useQuery({ queryKey: keys.settings, queryFn: api.settings, staleTime: 10 * SECOND });
 export const useMetaConfig = () => useQuery({ queryKey: keys.metaConfig, queryFn: api.metaConfig, staleTime: Infinity });
 export const useLoopLast = () => useQuery({ queryKey: keys.loopLast, queryFn: api.loopLast, staleTime: 10 * SECOND });
-export const useBrainSnapshot = () => useQuery({ queryKey: keys.brainSnapshot, queryFn: api.brainSnapshot, staleTime: 10 * SECOND });
+export const useBrainSnapshot = () => useQuery({ queryKey: keys.brainSnapshot, queryFn: api.brainSnapshot, staleTime: 10 * SECOND, refetchInterval: 10 * SECOND });
+/** Brain mode and the latest event message, every 2 s (drives the status orb). */
+export const useBrainState = () =>
+  useQuery({
+    queryKey: keys.brainState,
+    queryFn: async () => {
+      const [state, ev] = await Promise.all([api.brainState(), api.brainEvents(null, 1)]);
+      return { state, latest: ev.events.at(-1) ?? null };
+    },
+    staleTime: 0,
+    refetchInterval: 2 * SECOND,
+  });
 export const useBrainManifest = () => useQuery({ queryKey: keys.brainManifest, queryFn: api.brainManifest, staleTime: Infinity });
 
 /** Everything an action (approve, refresh, objective change…) can change. */

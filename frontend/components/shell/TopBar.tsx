@@ -9,6 +9,7 @@ import { useUiStore } from "@/lib/ui-store";
 import type { Autonomy, Objective } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import AskBar from "./AskBar";
+import StatusOrb from "./StatusOrb";
 
 function Status({ label, value }: { label: string; value: string }) {
   return (
@@ -49,7 +50,7 @@ function AutonomyControl() {
             onFocus={() => setHint(m)}
             onBlur={() => setHint(null)}
             disabled={!settings || update.isPending}
-            className={cn("rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", current === m ? "bg-synapse text-primary-foreground" : "text-fog hover:text-bone")}
+            className={cn("rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", current === m ? "bg-primary text-primary-foreground" : "text-fog hover:text-bone")}
           >
             {AUTONOMY_LABELS[m].label}
           </button>
@@ -110,8 +111,7 @@ export default function TopBar() {
       </div>
       <ObjectiveSelect />
       <AutonomyControl />
-      {/* Brain status orb: a static dot until the live orb is built in part 5. */}
-      <span role="img" aria-label="Brain status" className="size-3 shrink-0 rounded-full border-2 border-synapse bg-synapse/40" />
+      <StatusOrb />
     </div>
   );
 }

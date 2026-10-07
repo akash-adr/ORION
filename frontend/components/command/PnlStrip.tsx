@@ -6,7 +6,7 @@ import { LoadState } from "@/components/Panel";
 import { Spark } from "@/components/charts";
 import { inr, pct, ratio, tone as toneOf } from "@/lib/format";
 import { channelDisplay } from "@/lib/names";
-import { useChannels, useKpis, useTrend } from "@/lib/queries";
+import { useBrainSnapshot, useKpis, useTrend } from "@/lib/queries";
 import type { Kpi, TrendPoint } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -50,7 +50,7 @@ const last = (t: TrendPoint[] | undefined, k: keyof TrendPoint) => (t ?? []).map
 export default function PnlStrip({ period = 7 }: { period?: number }) {
   const q = useKpis(period);
   const trend = useTrend(14).data;
-  const channels = useChannels().data;
+  const sources = useBrainSnapshot().data?.sources;
   const t14 = trend?.slice(-14);
   return (
     <LoadState q={q} what="the P&L" height={150}>
@@ -58,7 +58,8 @@ export default function PnlStrip({ period = 7 }: { period?: number }) {
         const d = k.period_days;
         const per = `Last ${d} days, average per day`;
         const risk = k.stock_at_risk.skus;
-        const over = (channels ?? []).filter((c) => c.inflation_pct >= 0.05).map((c) => channelDisplay(c.channel));
+        // the engine itself flags a platform as over-reporting (source status "warn"); no cut-off of our own
+        const over = (sources ?? []).filter((x) => x.kind === "ad_platform" && x.status === "warn").map((x) => channelDisplay(x.channel));
         const sparkLabel = (what: string) => `${what} each day for the last 14 days`;
         return (
           <section aria-label={`P&L, last ${d} days, daily averages`} className="panel overflow-hidden">

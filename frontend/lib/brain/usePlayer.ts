@@ -22,8 +22,15 @@ export function useBrainEventPlayer(enabled = true) {
         const st = useBrainPlayer.getState();
         if (st.cursor === null) {
           // First contact: start from "now". History is only played on request (replay) or when new events arrive.
-          const r = await api.brainEvents(null, 1);
-          if (alive) useBrainPlayer.getState().setCursor(r.last_id ?? "");
+          const from = st.replayFrom;
+          const r = await api.brainEvents(null, from ? 200 : 1);
+          if (!alive) return;
+          if (from) {
+            // a replay was requested before this page mounted: play it from its first event
+            useBrainPlayer.getState().enqueue(r.events.filter((e) => e.id >= from));
+            useBrainPlayer.setState({ replayFrom: null });
+            if (!r.events.length) useBrainPlayer.getState().setCursor("");
+          } else useBrainPlayer.getState().setCursor(r.last_id ?? "");
         } else {
           const r = await api.brainEvents(st.cursor || null, 200);
           if (alive && r.events.length) useBrainPlayer.getState().enqueue(r.events);

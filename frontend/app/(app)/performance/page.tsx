@@ -38,7 +38,7 @@ function Body() {
               if (e.key === "ArrowRight") go(TABS[(i + 1) % TABS.length].id);
               if (e.key === "ArrowLeft") go(TABS[(i + TABS.length - 1) % TABS.length].id);
             }}
-            className={cn("rounded-md px-4 py-1.5 text-sm font-semibold transition-colors", tab === t.id ? "bg-synapse text-primary-foreground" : "text-fog hover:text-bone")}
+            className={cn("rounded-md px-4 py-1.5 text-sm font-semibold transition-colors", tab === t.id ? "bg-primary text-primary-foreground" : "text-fog hover:text-bone")}
           >
             {t.label}
           </button>

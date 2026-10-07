@@ -69,3 +69,47 @@ export function layoutNeurons(points: Float32Array, nodes: Pick<BrainNode, "enti
 export function nodeRadius(spend: number, maxSpend: number, min = 3, span = 6.5): number {
   return min + span * Math.sqrt(Math.max(0, spend) / Math.max(1, maxSpend));
 }
+
+/** Where each data source floats around the brain, in the same normalised space (outside the cortex). */
+export const SOURCE_POSITIONS: Record<string, V3> = {
+  meta_ads: [0.98, 0.58, 0.35],
+  google_ads: [0.1, 0.98, 0.25],
+  amazon_ads: [-0.98, 0.6, 0.3],
+  tiktok_ads: [1.08, -0.2, 0.4],
+  programmatic: [-1.08, -0.12, 0.35],
+  store: [-1.05, -0.6, 0.3],
+  inventory: [-0.55, -0.9, 0.3],
+  ga4: [0.45, -0.9, 0.3],
+  pricing: [1.0, -0.62, 0.35],
+};
+
+/** Source positions: fixed anchors, with a seeded fallback ring for any source the table does not know. */
+export function layoutSources(sources: { id: string }[]): Map<string, V3> {
+  const out = new Map<string, V3>();
+  sources.forEach((s, i) => {
+    const th = (i / Math.max(1, sources.length)) * Math.PI * 2;
+    out.set(s.id, SOURCE_POSITIONS[s.id] ?? [Math.cos(th) * 1.1, Math.sin(th) * 0.8, 0.3]);
+  });
+  return out;
+}
+
+/** A ghost (an untested combination) floats between its product and its channel's cluster, linked to the product. */
+export function layoutGhosts(ghosts: { id: string; sku_id: string; cluster: string }[], neurons: Map<string, V3>): Map<string, V3> {
+  const out = new Map<string, V3>();
+  for (const g of ghosts) {
+    const sku = neurons.get(g.sku_id) ?? CLUSTER_ANCHORS.catalog;
+    const a = CLUSTER_ANCHORS[g.cluster] ?? CLUSTER_ANCHORS.catalog;
+    const t = 0.45 + 0.2 * hash01(g.id, 4);
+    const th = hash01(g.id, 5) * Math.PI * 2;
+    out.set(g.id, [sku[0] + (a[0] - sku[0]) * t + Math.cos(th) * 0.07, sku[1] + (a[1] - sku[1]) * t + Math.sin(th) * 0.07, Math.max(0.2, sku[2] + (a[2] - sku[2]) * t)]);
+  }
+  return out;
+}
+
+/** Keys used by the overlay and the projector, so a neuron, a source and a cluster can never collide. */
+export const key = {
+  neuron: (id: string) => `n:${id}`,
+  source: (id: string) => `s:${id}`,
+  ghost: (id: string) => `g:${id}`,
+  cluster: (id: string) => `c:${id}`,
+};

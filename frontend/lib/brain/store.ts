@@ -74,12 +74,16 @@ interface BrainPlayer {
   highlightUntil: Record<string, number>;
   /** replay progress */
   replay: { total: number; done: number } | null;
+  /** id of the first replayed event; a player that mounts after the replay was requested starts from here, not from "now" */
+  replayFrom: string | null;
 
   setCursor: (id: string | null) => void;
   enqueue: (events: BrainEvent[]) => void;
   playNext: () => BrainEvent | null;
   setMode: (m: PlayerMode) => void;
-  startReplay: (total: number) => void;
+  /** a replay was just requested: remember where it starts and show progress */
+  beginReplay: (firstId: string, total: number) => void;
+  clearReplay: () => void;
 }
 
 let pulseSeq = 0;
@@ -93,6 +97,7 @@ export const useBrainPlayer = create<BrainPlayer>((set, get) => ({
   pulses: [],
   highlightUntil: {},
   replay: null,
+  replayFrom: null,
 
   setCursor: (cursor) => set({ cursor }),
   enqueue: (events) => {
@@ -123,5 +128,6 @@ export const useBrainPlayer = create<BrainPlayer>((set, get) => ({
     return e;
   },
   setMode: (mode) => set({ mode }),
-  startReplay: (total) => set({ replay: { total, done: 0 } }),
+  beginReplay: (firstId, total) => set({ replay: { total, done: 0 }, replayFrom: firstId }),
+  clearReplay: () => set({ replay: null, replayFrom: null }),
 }));

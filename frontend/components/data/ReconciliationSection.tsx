@@ -5,7 +5,7 @@ import { PairBars } from "@/components/charts";
 import ChannelBadge from "@/components/ChannelBadge";
 import { inr, num, pct, ratio } from "@/lib/format";
 import { channelDisplay } from "@/lib/names";
-import { useKpis, useReconciliation } from "@/lib/queries";
+import { useBrainSnapshot, useKpis, useReconciliation } from "@/lib/queries";
 
 function joinNames(names: string[]): string {
   return names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
@@ -14,11 +14,12 @@ function joinNames(names: string[]): string {
 export default function ReconciliationSection() {
   const q = useReconciliation();
   const kpis = useKpis(7).data;
+  const sources = useBrainSnapshot().data?.sources;
   return (
     <Panel title="Platform claims against the store" note="Over the whole data range">
       <LoadState q={q} what="the reconciliation" height={300}>
         {(rows) => {
-          const over = rows.filter((r) => r.inflation_pct >= 0.05).map((r) => channelDisplay(r.channel));
+          const over = (sources ?? []).filter((x) => x.kind === "ad_platform" && x.status === "warn").map((x) => channelDisplay(x.channel));
           return (
             <div className="grid gap-5">
               <PairBars

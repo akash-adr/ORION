@@ -8,7 +8,7 @@ import { LoadState, Panel } from "@/components/Panel";
 import { PairBars } from "@/components/charts";
 import { inrDay, num, pct, ratio } from "@/lib/format";
 import { channelDisplay } from "@/lib/names";
-import { useChannels, useReconciliation } from "@/lib/queries";
+import { useBrainSnapshot, useChannels, useReconciliation } from "@/lib/queries";
 import type { ChannelRow, ReconciliationRow } from "@/lib/types";
 
 type Row = ChannelRow & { rec?: ReconciliationRow };
@@ -16,6 +16,7 @@ type Row = ChannelRow & { rec?: ReconciliationRow };
 export default function ChannelsTab({ onPick }: { onPick: (channel: string) => void }) {
   const ch = useChannels();
   const rec = useReconciliation();
+  const warn = new Set((useBrainSnapshot().data?.sources ?? []).filter((x) => x.kind === "ad_platform" && x.status === "warn").map((x) => x.channel));
   return (
     <div className="grid gap-5">
       <Panel title="Return on ad spend by channel" note="Last 7 days. What platforms claim against what the store verified">
@@ -51,7 +52,7 @@ export default function ChannelsTab({ onPick }: { onPick: (channel: string) => v
                 align: "right",
                 sort: (r) => r.inflation_pct,
                 cell: (r) =>
-                  r.inflation_pct >= 0.05 ? (
+                  warn.has(r.channel) ? (
                     <span className="inline-flex items-center gap-1 font-semibold tone-risk">
                       <TriangleAlert className="size-3.5" aria-hidden />
                       {pct(r.inflation_pct)}

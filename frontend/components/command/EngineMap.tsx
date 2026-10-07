@@ -48,7 +48,7 @@ export default function EngineMap() {
       <LoadState q={q} what="the engine map" height={300}>
         {(s) => (
           <>
-            <LiveBrain snapshot={s} maxDots={3600} height={300} onHover={(n, at) => setHover(n && at ? { n, x: at.x, y: at.y } : null)} onSelect={(n) => router.push(`/neural?focus=${encodeURIComponent(n.entity_id)}`)} />
+            <LiveBrain snapshot={s} maxDots={3600} height={300} onHover={(p, at) => setHover(p?.kind === "neuron" && at ? { n: p.node, x: at.x, y: at.y } : null)} onPick={(p) => p.kind === "neuron" && router.push(`/neural?focus=${encodeURIComponent(p.node.entity_id)}`)} />
             <div className="mt-2 flex items-center gap-2 border-t border-line pt-3 text-sm" aria-live="polite">
               <span className={`size-2 shrink-0 rounded-full ${mode === "idle" ? "bg-fog" : "bg-synapse"}`} aria-hidden />
               <span className={mode === "idle" ? "text-fog" : ""}>{caption ?? "Waiting for the next engine event."}</span>

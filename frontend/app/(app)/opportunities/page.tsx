@@ -9,19 +9,15 @@ import PageHeader from "@/components/PageHeader";
 import { LoadState, Panel } from "@/components/Panel";
 import { StatusChip } from "@/components/chips";
 import { inrDay, num, pct, ratio } from "@/lib/format";
+import { findLaunchDecision } from "@/lib/launch";
 import { useBrainSnapshot, useMetaConfig, useOpportunities, useRecommendations } from "@/lib/queries";
-import type { Decision, Opportunity } from "@/lib/types";
+import type { Opportunity } from "@/lib/types";
 
-type Launch = { sku_id: string; channel: string; audience: string };
-const launchOf = (d: Decision) => (d.action as { launch?: Launch }).launch;
 
 function Expanded({ o, guard }: { o: Opportunity; guard: number }) {
   const recs = useRecommendations().data;
   const [open, setOpen] = useState(false);
-  const match = [...(recs?.pending ?? []), ...(recs?.history ?? [])].find((d) => {
-    const l = d.action.type === "launch_test" ? launchOf(d) : undefined;
-    return l && l.sku_id === o.sku_id && l.channel === o.channel && l.audience === o.audience;
-  });
+  const match = findLaunchDecision([...(recs?.pending ?? []), ...(recs?.history ?? [])], o);
   return (
     <div className="grid gap-4">
       <p className="flex items-start gap-1.5 text-sm text-fog">

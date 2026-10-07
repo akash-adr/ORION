@@ -49,7 +49,7 @@ export default function OptimizerPanel() {
     <Panel title="Optimizer" note="The best spend plan for an objective, per day. A preview: nothing is sent">
       <div role="tablist" aria-label="Objective" className="mb-4 inline-flex flex-wrap rounded-lg border border-line bg-slate-2 p-0.5">
         {objectives.map((o) => (
-          <button key={o} role="tab" aria-selected={objective === o} onClick={() => setPicked(o)} className={cn("rounded-md px-3.5 py-1.5 text-sm font-semibold transition-colors", objective === o ? "bg-synapse text-primary-foreground" : "text-fog hover:text-bone")}>
+          <button key={o} role="tab" aria-selected={objective === o} onClick={() => setPicked(o)} className={cn("rounded-md px-3.5 py-1.5 text-sm font-semibold transition-colors", objective === o ? "bg-primary text-primary-foreground" : "text-fog hover:text-bone")}>
             {OBJECTIVE_LABELS[o]}
           </button>
         ))}

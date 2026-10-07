@@ -5,13 +5,20 @@ export function readToken(name: string, scope?: Element | null, fallback = "#8b9
   return v || fallback;
 }
 
+let webglProbe: boolean | null = null;
+
+/** Is WebGL available? Probed once (each probe makes a context) and the probe context is released straight away. */
 export function webglAvailable(): boolean {
+  if (webglProbe !== null) return webglProbe;
   try {
     const c = document.createElement("canvas");
-    return !!(c.getContext("webgl2") || c.getContext("webgl"));
+    const gl = (c.getContext("webgl2") || c.getContext("webgl")) as WebGLRenderingContext | null;
+    webglProbe = !!gl;
+    gl?.getExtension("WEBGL_lose_context")?.loseContext();
   } catch {
-    return false;
+    webglProbe = false;
   }
+  return webglProbe;
 }
 
 export const prefersReducedMotion = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;

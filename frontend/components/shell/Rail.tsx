@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useDemoReset, useReplay, useSettings } from "@/lib/queries";
 import { useRunLoop } from "./useRunLoop";
 import { ApiError } from "@/lib/api";
+import { useBrainPlayer } from "@/lib/brain/store";
 import { useUiStore } from "@/lib/ui-store";
 import { cn } from "@/lib/utils";
 import ConfirmDialog from "./ConfirmDialog";
@@ -40,6 +41,7 @@ export default function Rail() {
   const startReplay = () =>
     replay.mutate(undefined, {
       onSuccess: (r) => {
+        useBrainPlayer.getState().beginReplay(r.first_id, r.events_queued);
         toast("info", `Replaying the last 7 days · ${r.events_queued} events queued`);
         router.push("/neural");
       },
@@ -65,7 +67,7 @@ export default function Rail() {
   return (
     <aside className="flex items-center gap-2 border-b border-line bg-slate px-3 py-2 min-[1000px]:sticky min-[1000px]:top-0 min-[1000px]:h-screen min-[1000px]:flex-col min-[1000px]:items-stretch min-[1000px]:gap-1 min-[1000px]:border-r min-[1000px]:border-b-0 min-[1000px]:p-3 max-[999px]:overflow-x-auto">
       <Link href="/command" className="flex shrink-0 items-center gap-2.5 px-2 py-1.5 min-[1000px]:mb-4 min-[1000px]:max-[1199px]:justify-center min-[1000px]:max-[1199px]:px-0" aria-label="Profit Pilot, home">
-        <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-synapse text-[15px] font-extrabold text-primary-foreground" aria-hidden>
+        <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary text-[15px] font-extrabold text-primary-foreground" aria-hidden>
           P
         </span>
         <span className={cn("text-base font-extrabold tracking-tight", lab)}>Profit Pilot</span>
@@ -93,7 +95,7 @@ export default function Rail() {
       </nav>
 
       <div className="flex shrink-0 gap-1 border-line max-[999px]:ml-auto min-[1000px]:flex-col min-[1000px]:border-t min-[1000px]:pt-3">
-        <button onClick={runLoop} disabled={running} className={cn(btn, "bg-synapse !text-primary-foreground hover:!bg-synapse/85")} title="Run the loop now">
+        <button onClick={runLoop} disabled={running} className={cn(btn, "bg-primary !text-primary-foreground hover:!bg-primary/85")} title="Run the loop now">
           {running ? <LoaderCircle className="size-[18px] animate-spin" aria-hidden /> : <Play className="size-[18px]" aria-hidden />}
           <span className={lab}>{running ? "Running the loop" : "Run the loop now"}</span>
         </button>

@@ -139,6 +139,8 @@ html[data-theme="light"] {
   --region-learn: #b4761a;
 
   --shadow-float: 0 12px 32px -10px rgba(18, 26, 43, 0.22);
+  /* white text on the light accent is 3.9:1; buttons use a darker primary so their labels pass AA (data colours keep --synapse) */
+  --primary: #0b7a92;
   --primary-foreground: #ffffff;
   color-scheme: light;
 }

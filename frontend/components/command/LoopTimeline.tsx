@@ -48,7 +48,7 @@ export default function LoopTimeline() {
       <LoadState q={q} what="the loop" height={120}>
         {(last) => {
           const runBtn = (
-            <button onClick={run} disabled={running} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-synapse px-3 text-sm font-semibold text-primary-foreground hover:bg-synapse/85 disabled:opacity-60">
+            <button onClick={run} disabled={running} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/85 disabled:opacity-60">
               {running ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden /> : <Play className="size-3.5" aria-hidden />}
               Run the loop now
             </button>

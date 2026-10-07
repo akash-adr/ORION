@@ -104,7 +104,7 @@ export default function DecisionRow({ d, open, onToggle }: Props) {
                 <button
                   onClick={act.approve}
                   disabled={act.busy || act.advisory || d.blocked}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-synapse px-3 text-sm font-semibold text-primary-foreground hover:bg-synapse/85 disabled:opacity-50"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/85 disabled:opacity-50"
                 >
                   {act.pending.approve && <LoaderCircle className="size-3.5 animate-spin" aria-hidden />}
                   Approve
