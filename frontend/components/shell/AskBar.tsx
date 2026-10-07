@@ -2,7 +2,7 @@
 
 import { LoaderCircle, Search, Send, X } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { ApiError } from "@/lib/api";
 import { parseCampaignName } from "@/lib/names";
 import { useAsk, useBrainSnapshot } from "@/lib/queries";
@@ -45,6 +45,23 @@ export default function AskBar() {
     setOpen(true);
     ask.mutate(question, { onSuccess: (r) => setHighlights(r.highlights) });
   };
+
+  // another part of the app (the Pitch walkthrough) can ask for a question to be sent; take it when it arrives or was already waiting
+  const sendRequested = useEffectEvent((text: string) => submit(text));
+  useEffect(() => {
+    const take = () => {
+      const text = useUiStore.getState().askRequest;
+      if (!text) return;
+      useUiStore.getState().requestAsk(null);
+      sendRequested(text);
+    };
+    const t = setTimeout(take, 0);
+    const off = useUiStore.subscribe(take);
+    return () => {
+      clearTimeout(t);
+      off();
+    };
+  }, []);
 
   const label = (t: BrainTarget): string => {
     if (t.type === "neuron") {

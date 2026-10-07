@@ -32,7 +32,9 @@ If the engine is not reachable the app shows a banner with a Retry button instea
 | `npm test` | 41 unit tests (formatting, names, layout, decision logic, thresholds) |
 | `npm run e2e` | the mouse-only demo flow in Chrome against the running backend and `:3100` |
 | `npx playwright test -c e2e/playwright.config.ts e2e/a11y.spec.ts` | axe accessibility scan, both themes, every page |
+| `npx playwright test -c e2e/playwright.config.ts e2e/pitch.spec.ts` | the Pitch page and its walkthrough, including the approve in step 7 (it resets the demo before and after) |
 | `node e2e/capture.mjs` | re-captures every page at 1440 and 900 wide in both themes |
+| `node e2e/capture-pitch.mjs` | re-captures `/pitch`, each callout in focus mode, and all nine walkthrough steps at 1920 and 1440, both themes |
 
 After CSS edits to `app/globals.css` restart the dev server; in this setup it does not recompile that file on change.
 
@@ -40,6 +42,7 @@ After CSS edits to `app/globals.css` restart the dev server; in this setup it do
 
 | Route | What it shows |
 |---|---|
+| `/pitch` | The engine explained on one screen: live brain, five stage callouts, inputs, actions, the loop, and a guided walkthrough with presenter mode (see below) |
 | `/command` | The P&L strip (profit, profit on spend, ad spend with store-verified against claimed ROAS, revenue, stock at risk, data trust), the decision ledger with a 7-step trace per decision, the live Engine map, ranked signals, and the loop timeline |
 | `/neural` | The whole engine as a live map: campaigns, products, data sources, untested ideas and the memory between them, with a live pulse feed, a legend, and a details drawer |
 | `/diagnosis` | Why a signal happened: brief, waterfall of causes, factor table, evidence charts, causal proof, funnel, and the matching decision |
@@ -71,6 +74,46 @@ After CSS edits to `app/globals.css` restart the dev server; in this setup it do
 | Closed-loop learning (outcomes, forecast error, synapse memory) | `/learning`; line thickness on `/neural` |
 | The AI agent (Claude or the rules engine, with traceable numbers) | The Ask bar on every page, with highlights on the map |
 | The continuous loop (steps, events, next run) | Loop timeline on `/command`; the status orb in the top bar |
+
+## Pitch walkthrough
+
+`/pitch` tells the engine's story in two to three minutes, using only what the API says right now. Nothing on it is typed in: every caption is built from the live queries, so it changes when the data does.
+
+**How to present**
+
+1. Reset the demo first (`Reset demo` in the left rail, or `POST /demo/reset`), so autonomy is Supervised and the numbers are the planted ones.
+2. Open `/pitch`. Press **Presenter mode** (full screen, with the sidebar and top bar hidden on this page only; a small **Ask** button stays in the corner).
+3. Press **Start walkthrough**. It starts on step 1 and autoplays (9 seconds a step, 11 for the two with a chart or a button). Autoplay holds while the pointer is over the caption or anything on the page, or a detail sheet is open, and carries on when you move away. With reduced motion it starts paused, with instant camera moves and no pulses.
+4. Drive it by hand whenever you like:
+
+| Key | Does |
+|---|---|
+| `→` or `Space` | next step |
+| `←` | back |
+| `1`–`9` | jump to a step |
+| `P` | play or pause autoplay |
+| `N` | speaker notes (two sentences from the live data) |
+| `Esc` | close a sheet, then leave the walkthrough, then leave presenter mode |
+
+`/pitch?step=4` opens the walkthrough at step 4 (counting from 0, so the Prediction step), paused.
+
+**What each step shows** (the number in brackets is the step in the URL)
+
+| Step | Caption says | Brain |
+|---|---|---|
+| 1 Overview (0) | profit per day and profit on spend | the whole brain |
+| 2 Perception (1) | sources live, how much Meta and Google claim over the store, data trust | Ingest region, the platform sources |
+| 3 Reasoning (2) | signals, the biggest one and the biggest riser, planted problems found | alerting neurons ringed one by one |
+| 4 Why (3) | the biggest cause as a share of the change, a cost waterfall, and (on wide screens) the price-change causal chart | the anomaly's cluster |
+| 5 Prediction (4) | the best untested idea, how many campaigns can grow, the model's held-out R² | the top untested idea |
+| 6 Decision (5) | the top decision, its confidence, the stock lock, profit now against planned | Decide region, locked neurons |
+| 7 Action (6) | autonomy mode, decisions waiting, decisions automatic, and **Approve top decision** | Decide region |
+| 8 Memory (7) | forecast error first against last, calibration, win-rate, the latest outcome (simulated) | Learn region |
+| 9 Close (8) | one line per stage, two question chips that go to the Ask bar | the whole brain, the loop strip lit once |
+
+Step 7 only offers **Approve top decision** when autonomy is not Advisory and the top decision is not blocked. It asks for confirmation, runs the normal approve with the mock ad-platform calls, and the caption then says what was sent. Step 8 shows the outcome that came back. **Reset the demo afterwards** so the next run starts from the same state. Starting the walkthrough again forgets the approval, so the captions read the engine's current state.
+
+If a step's own data is missing it shows the nearest fact instead of an error (for example, no causal result: the Why step shows the cost waterfall alone; no cost spike: it explains the biggest loss).
 
 ## Design principles
 

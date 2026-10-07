@@ -1,6 +1,6 @@
 "use client";
 
-import { Expand, LoaderCircle, Minimize, Play, Presentation, Rewind } from "lucide-react";
+import { Expand, LoaderCircle, Minimize, MonitorPlay, Play, Presentation, Rewind } from "lucide-react";
 import { useState } from "react";
 import { useRunLoop } from "@/components/shell/useRunLoop";
 import { ApiError, api } from "@/lib/api";
@@ -23,9 +23,11 @@ interface Props {
   /** wired by the walkthrough */
   onStart?: () => void;
   walking?: boolean;
+  presenting?: boolean;
+  onPresenter?: () => void;
 }
 
-export default function Headline({ data, fullscreen, onFullscreen, onStart, walking }: Props) {
+export default function Headline({ data, fullscreen, onFullscreen, onStart, walking, presenting, onPresenter }: Props) {
   const toast = useUiStore((s) => s.toast);
   const { run, running } = useRunLoop();
   const replay = useBrainPlayer((s) => s.replay);
@@ -55,7 +57,7 @@ export default function Headline({ data, fullscreen, onFullscreen, onStart, walk
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <h1 className="text-[28px] leading-tight font-extrabold tracking-tight">How Margin Mind thinks</h1>
         <div className="flex flex-wrap items-center gap-2">
-          <button onClick={onStart} disabled={!onStart || !data.ready} title={onStart ? undefined : "Coming next"} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3.5 text-sm font-semibold text-primary-foreground hover:bg-primary/85 disabled:opacity-60">
+          <button onClick={onStart} disabled={!onStart || !data.ready} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3.5 text-sm font-semibold text-primary-foreground hover:bg-primary/85 disabled:opacity-60">
             <Presentation className="size-4" aria-hidden />
             {walking ? "Restart walkthrough" : "Start walkthrough"}
           </button>
@@ -67,9 +69,12 @@ export default function Headline({ data, fullscreen, onFullscreen, onStart, walk
             {running ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : <Play className="size-4" aria-hidden />}
             Run the loop now
           </button>
-          <button onClick={onFullscreen} className={btn}>
+          <button onClick={onPresenter} className={btn} title="Full screen, without the sidebar and top bar">
+            <MonitorPlay className="size-4" aria-hidden />
+            {presenting ? "Exit presenter" : "Presenter mode"}
+          </button>
+          <button onClick={onFullscreen} className="inline-flex size-9 items-center justify-center rounded-lg border border-line hover:bg-slate-2" aria-label={fullscreen ? "Exit full screen" : "Full screen"} title={fullscreen ? "Exit full screen" : "Full screen"}>
             {fullscreen ? <Minimize className="size-4" aria-hidden /> : <Expand className="size-4" aria-hidden />}
-            {fullscreen ? "Exit full screen" : "Full screen"}
           </button>
         </div>
       </div>

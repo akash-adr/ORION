@@ -1,6 +1,8 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
+import { useUiStore } from "@/lib/ui-store";
 import Intro from "@/components/intro/Intro";
 import OfflineBanner from "./OfflineBanner";
 import Rail from "./Rail";
@@ -25,6 +27,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const seen = useSyncExternalStore<boolean | null>(noop, readSeen, serverNull);
   const reduced = useSyncExternalStore<boolean | null>(noop, readReduced, serverNull);
   const [finished, setFinished] = useState(false);
+  const pathname = usePathname();
+  const presenterOn = useUiStore((s) => s.presenter);
+  const presenting = presenterOn && pathname === "/pitch";
   const phase = seen === null || reduced === null ? "checking" : seen || reduced || finished ? "done" : "intro";
 
   const introDone = () => {
@@ -37,12 +42,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen min-[1000px]:grid min-[1000px]:grid-cols-[72px_minmax(0,1fr)] min-[1200px]:grid-cols-[236px_minmax(0,1fr)]">
-      <Rail />
+    <div className={presenting ? "min-h-screen" : "min-h-screen min-[1000px]:grid min-[1000px]:grid-cols-[72px_minmax(0,1fr)] min-[1200px]:grid-cols-[236px_minmax(0,1fr)]"}>
+      {!presenting && <Rail />}
       <div className="flex min-w-0 flex-col">
         <OfflineBanner />
-        <TopBar />
-        <main className="min-w-0 flex-1 px-4 py-6 min-[1000px]:px-6 min-[1200px]:px-8">{children}</main>
+        {!presenting && <TopBar />}
+        <main className={presenting ? "min-w-0 flex-1 px-4 py-4" : "min-w-0 flex-1 px-4 py-6 min-[1000px]:px-6 min-[1200px]:px-8"}>{children}</main>
       </div>
       <Toaster />
       {phase === "checking" && <div className="fixed inset-0 z-[100] bg-ink" aria-hidden />}

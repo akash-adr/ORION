@@ -1,7 +1,7 @@
 "use client";
 
 import { kindDisplay } from "@/lib/names";
-import { useAnomalies, useBrainSnapshot, useCampaigns, useCurves, useKpis, useLearning, useLoopLast, useMetaConfig, useOpportunities, useReconciliation, useRecommendations, useSettings, useSources } from "@/lib/queries";
+import { useAnomalies, useBrainSnapshot, useCampaigns, useCurves, useDiagnosis, useKpis, useLearning, useLoopLast, useMetaConfig, useOpportunities, useReconciliation, useRecommendations, useSettings, useSources } from "@/lib/queries";
 import type { Anomaly, BrainNode, BrainSource, Decision, Opportunity } from "@/lib/types";
 
 export type CalloutId = "perception" | "reasoning" | "prediction" | "decision" | "memory";
@@ -55,6 +55,17 @@ export function usePitchData() {
   const curves = useCurves();
   const campaigns = useCampaigns();
 
+  // the diagnosis the "Why" step explains (the auction-cost spike if there is one, else the biggest loss with causes) and the price event's causal proof
+  const anomalyList = anomalies.data ?? [];
+  const whyAnomaly =
+    anomalyList.find((a) => a.kind === "cpc_spike") ??
+    [...anomalyList].filter((a) => a.profit_impact < 0 && a.kind !== "attribution_inflation" && a.kind !== "stockout_risk").sort((a, b) => a.profit_impact - b.profit_impact)[0] ??
+    null;
+  const priceAnomaly = anomalyList.find((a) => (a.detail.price_change ?? 0) !== 0) ?? null;
+  const whyDx = useDiagnosis(whyAnomaly?.id ?? null);
+  // one diagnosis at a time: the engine computes each from shared frames, and two at once can race on the devserver
+  const priceDx = useDiagnosis(whyDx.isSuccess || whyDx.isError || !whyAnomaly ? (priceAnomaly?.id ?? null) : null);
+
   const all = [kpis, snap, sources, recon, anomalies, recs, opps, learning, cfg, settings, curves, campaigns];
   const ready = all.every((q) => q.isSuccess);
   const offline = all.some((q) => q.isError);
@@ -102,7 +113,7 @@ export function usePitchData() {
   return {
     ready,
     offline,
-    q: { kpis, snap, sources, recon, anomalies, recs, opps, learning, loop, cfg, settings, curves, campaigns },
+    q: { whyDx, priceDx, kpis, snap, sources, recon, anomalies, recs, opps, learning, loop, cfg, settings, curves, campaigns },
     kpis: kpis.data,
     snapshot: s,
     settings: settings.data,
@@ -112,6 +123,8 @@ export function usePitchData() {
     opps: oppList,
     anomalies: list,
     nodes,
+    why: { anomaly: whyAnomaly, diagnosis: whyDx.data ?? null },
+    price: { anomaly: priceAnomaly, causal: priceDx.data?.evidence.causal ?? null },
     derived: {
       sourceCount: sources.data?.length ?? 0,
       overReport,

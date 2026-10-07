@@ -113,7 +113,7 @@ export default function Connectors({ container, canvas, anchors, lines }: Props)
     <svg className="pointer-events-none absolute inset-0 z-10 h-full w-full overflow-visible" aria-hidden>
       {lines.map((l) => (
         <g key={l.id}>
-          <path ref={(el) => void (el ? paths.current.set(l.id, el) : paths.current.delete(l.id))} fill="none" stroke={l.active ? l.color : "var(--line)"} strokeWidth={l.active ? 1.75 : 1} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "stroke 150ms, stroke-width 150ms" }} />
+          <path data-line={l.id} data-active={l.active ? "true" : "false"} ref={(el) => void (el ? paths.current.set(l.id, el) : paths.current.delete(l.id))} fill="none" stroke={l.active ? l.color : "var(--line)"} strokeWidth={l.active ? 1.75 : 1} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "stroke 150ms, stroke-width 150ms" }} />
           {l.particles &&
             [0, 1, 2].map((i) => (
               <circle

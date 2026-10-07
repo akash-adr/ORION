@@ -27,6 +27,13 @@ interface UiStore {
   highlights: BrainTarget[];
   setHighlights: (h: BrainTarget[]) => void;
 
+  /** Pitch presenter mode: the app shell hides the rail and top bar (only on /pitch). */
+  presenter: boolean;
+  setPresenter: (p: boolean) => void;
+  /** A question another part of the app wants the Ask bar to send (consumed by the Ask bar). */
+  askRequest: string | null;
+  requestAsk: (q: string | null) => void;
+
   /** The engine is unreachable (set by the API client). */
   offline: boolean;
   setOffline: (o: boolean) => void;
@@ -46,6 +53,11 @@ export const useUiStore = create<UiStore>((set, get) => ({
     setTimeout(() => get().dismissToast(id), tone === "loss" ? 8000 : 5000);
   },
   dismissToast: (id) => set({ toasts: get().toasts.filter((t) => t.id !== id) }),
+
+  presenter: false,
+  setPresenter: (presenter) => set({ presenter }),
+  askRequest: null,
+  requestAsk: (askRequest) => set({ askRequest }),
 
   highlights: [],
   setHighlights: (highlights) => set({ highlights }),

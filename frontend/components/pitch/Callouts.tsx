@@ -51,9 +51,11 @@ interface Props {
   active: CalloutId | null;
   focused: CalloutId | null;
   onFocus: (r: PitchRef) => void;
+  /** walkthrough: title and key number only, others dim to 0.45 */
+  compact?: boolean;
 }
 
-export default function Callouts({ data, linked, active, focused, onFocus }: Props) {
+export default function Callouts({ data, linked, active, focused, onFocus, compact = false }: Props) {
   const setHover = usePitchStore((s) => s.setHover);
   return (
     <>
@@ -66,6 +68,7 @@ export default function Callouts({ data, linked, active, focused, onFocus }: Pro
             key={c.id}
             data-pitch={`callout:${c.id}`}
             data-keep
+            data-dim={dim || undefined}
             aria-label={`${c.label}: ${c.does}. ${k.key}. ${k.fact}`}
             onPointerEnter={() => setHover({ kind: "callout", id: c.id })}
             onPointerLeave={() => setHover(null)}
@@ -74,15 +77,15 @@ export default function Callouts({ data, linked, active, focused, onFocus }: Pro
             onClick={() => onFocus({ kind: "callout", id: c.id })}
             style={{ borderLeftColor: on ? TINT[c.id] : undefined, borderLeftWidth: on ? 3 : 1 }}
             className={cn(
-              "panel z-20 w-full p-2.5 text-left transition-opacity duration-150 hover:border-fog min-[1200px]:absolute min-[1200px]:w-[172px]",
-              POS[c.id],
-              dim && "opacity-55",
+              "panel pointer-events-auto z-20 w-full p-2.5 text-left transition-opacity duration-200 hover:border-fog",
+              compact ? "min-[1200px]:w-auto min-[1200px]:min-w-0 min-[1200px]:flex-1 min-[1200px]:p-2" : cn("min-[1200px]:absolute min-[1200px]:w-[172px]", POS[c.id]),
+              dim && (compact ? "opacity-45" : "opacity-55"),
             )}
           >
             <div className="text-sm font-bold">{c.label}</div>
-            <div className="text-xs text-fog">{c.does}</div>
-            <div className="mt-1 text-lg leading-tight font-bold">{k.key}</div>
-            <p className="mt-0.5 line-clamp-4 text-xs leading-snug text-fog">{k.fact}</p>
+            {!compact && <div className="text-xs text-fog">{c.does}</div>}
+            <div className={cn("leading-tight font-bold", compact ? "text-sm" : "mt-1 text-lg")}>{k.key}</div>
+            {!compact && <p className="mt-0.5 line-clamp-4 text-xs leading-snug text-fog">{k.fact}</p>}
           </button>
         );
       })}

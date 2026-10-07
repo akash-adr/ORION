@@ -1,4 +1,5 @@
 // node e2e/capture-pitch.mjs  → e2e/screenshots/pitch/ (needs backend :8000 and the app on :3100)
+// pitch-<w>-<theme>.png, focus-<callout>-…, and step-<0..8>-<w>-<theme>.png
 import { chromium } from "playwright-core";
 const BASE = process.env.BASE ?? "http://localhost:3100";
 const b = await chromium.launch({ channel: "chrome", args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
@@ -19,6 +20,14 @@ for (const [w, h] of [[1920, 1080], [1440, 900]]) {
         await p.keyboard.press("Escape");
         await p.waitForTimeout(700);
       }
+    }
+    // every walkthrough step, by deep link
+    for (let n = 0; n < 9; n++) {
+      await p.goto(`${BASE}/pitch?step=${n}`);
+      await p.waitForTimeout(5500);
+      if (theme === "light") await p.getByRole("button", { name: /Light theme/ }).click();
+      await p.waitForTimeout(400);
+      await p.screenshot({ path: `e2e/screenshots/pitch/step-${n}-${w}-${theme}.png` });
     }
     await p.context().close();
   }
