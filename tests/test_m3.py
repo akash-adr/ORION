@@ -72,8 +72,67 @@ def test_detects_all_planted_scenarios(alerts):
 
 def test_false_alarm_control(alerts):
     q = evaluate(alerts, AS_OF)
-    assert len(q["false_alarms"]) <= 2
+    assert q["false_alarms"] == []  # every extra alert is a classified knock-on
     assert q["recall"] == 1.0 and q["expected"] == 7 and q["found"] == 7 and q["missed"] == []
+    assert q["precision"] == 1.0
+
+
+def test_knock_ons_are_classified(alerts):
+    q = evaluate(alerts, AS_OF)
+    knock = {k["entity_id"]: k for k in q["knock_on"]}
+    assert set(knock) == {"CMP-02", "SKU-J"}
+    assert knock["CMP-02"]["reason"] == "knock-on of S3" and knock["CMP-02"]["scenario"] == "S3"
+    assert knock["SKU-J"]["reason"] == "viral cold traffic converts worse" and knock["SKU-J"]["scenario"] == "S7"
+
+
+def test_knock_on_related_links(alerts):
+    assert pair(alerts, "metric_shift", "CMP-02").detail["related"] == ["cpc_spike:google"]
+    assert pair(alerts, "conversion_drop", "SKU-J").detail["related"] == ["positive_spike:CMP-10"]
+    linked = {(a.kind, a.entity_id) for a in alerts if a.detail["related"]}
+    assert linked == {("metric_shift", "CMP-02"), ("conversion_drop", "SKU-J")}
+    # SKU-D's drop is a price effect, not a knock-on of anything
+    assert pair(alerts, "conversion_drop", "SKU-D").detail["related"] == []
+    # every related key points at an alert that exists
+    keys = {store.anomaly_key(a) for a in alerts}
+    assert all(r in keys for a in alerts for r in a.detail["related"])
+
+
+def test_cmp06_not_flagged_by_significance_gate(env, alerts):
+    """CMP-06's profit really halves, but it is too noisy to pass the significance gate (two-gate rule)."""
+    assert pair(alerts, "metric_shift", "CMP-06") is None and pair(alerts, "positive_spike", "CMP-06") is None
+    fact = read_table("fact_daily")
+    recent, base = d._windows(fact, config.RECENT_DAYS, config.BASELINE_DAYS)
+    r, b = recent[recent["campaign_id"] == "CMP-06"], base[base["campaign_id"] == "CMP-06"]
+    z = d.robust_z(r["profit"], b["profit"])
+    change = (r["profit"].mean() - b["profit"].mean()) / abs(b["profit"].mean())
+    assert abs(change) >= config.MIN_PCT_CHANGE  # practically large ...
+    assert abs(z) < config.Z_THRESHOLD  # ... but not significant
+    assert z == pytest.approx(-1.08, abs=0.05)
+
+
+def test_gain_severity_uses_absolute_impact(env, alerts):
+    from backend.core import metrics as m
+    assert d._sev(13_686, "positive_spike") == "medium"
+    assert d._sev(30_000, "positive_spike") == "high"
+    assert d._sev(5_000, "positive_spike") == "low"
+    assert d._sev(-13_686, "metric_shift") == "medium"  # loss rule unchanged
+    assert m.severity_from_impact(13_686) == "low"  # the M0 helper is untouched
+    assert pair(alerts, "positive_spike", "CMP-10").severity == "medium"
+
+
+def test_stockout_z_is_unclipped(env, alerts):
+    """SKU-B's z prints as -2.50; recompute it from the table to prove it is real (-2.498), not clipped/defaulted."""
+    sku = read_table("sku_daily")
+    recent, base = d._windows(sku, config.RECENT_DAYS, config.BASELINE_DAYS)
+    r = recent[recent["sku_id"] == "SKU-B"]["days_cover"].to_numpy()
+    b = base[base["sku_id"] == "SKU-B"]["days_cover"].to_numpy()
+    median = np.median(b)
+    mad = np.median(np.abs(b - median)) * config.MAD_SCALE
+    expected = (r.mean() - median) / mad * np.sqrt(len(r)) / 2
+    assert d.robust_z(r, b) == pytest.approx(expected)
+    assert -2.5 < expected < -2.49  # -2.4984...: rounds to -2.50 for display, not clipped at it
+    a = pair(alerts, "stockout_risk", "SKU-B")
+    assert a.z == round(expected, 2) == -2.5
 
 
 def test_sorted_by_impact(alerts):
@@ -244,7 +303,11 @@ def test_event_message_and_payload(fresh_state):
     run_detection(as_of=AS_OF, verbose=False)
     ev = next(e for e in read_brain_events(limit=500) if e["payload"]["key"] == "creative_fatigue:CMP-01")
     assert ev["message"].startswith("Creative fatigue · Meta · Summer Sneakers · broad — CTR −")
-    assert ev["entity_id"] == "CMP-01" and ev["severity"] == "low"
+    assert ev["entity_id"] == "CMP-01" and ev["severity"] == "low" and ev["payload"]["related"] == []
+    knock = next(e for e in read_brain_events(limit=500) if e["payload"]["key"] == "conversion_drop:SKU-J")
+    assert knock["payload"]["related"] == ["positive_spike:CMP-10"]
+    cmp02 = next(e for e in read_brain_events(limit=500) if e["payload"]["key"] == "metric_shift:CMP-02")
+    assert cmp02["payload"]["related"] == ["cpc_spike:google"]
     sb = next(e for e in read_brain_events(limit=500) if e["payload"]["key"] == "stockout_risk:SKU-B")
     assert {"SKU-B", "CMP-03", "CMP-04", "CMP-05"} <= set(sb["payload"]["targets"])
 

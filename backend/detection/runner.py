@@ -80,7 +80,8 @@ def run_detection(as_of: str | None = None, emit_brain_events: bool = True, verb
                     message=f"{a.label} — {change_text(a)}",
                     payload={"key": key, "kind": a.kind, "entity_type": a.entity_type,
                              "direction": a.detail["direction"], "change_pct": a.change_pct, "z": a.z,
-                             "profit_impact": a.profit_impact, "targets": targets})
+                             "profit_impact": a.profit_impact, "targets": targets,
+                             "related": a.detail.get("related", [])})
                 logged.append(log_brain_event(ev))
             current[key] = {"id": a.id, "kind": a.kind, "entity_id": a.entity_id, "severity": a.severity,
                             "first_seen": previous["first_seen"] if previous else as_of, "last_seen": as_of,

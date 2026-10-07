@@ -609,15 +609,15 @@ Windows end on the **last date in the data**, never today. Window ratios are Σn
 | Kind | Level | Triggers when | ₹/day impact | Planted |
 |---|---|---|---|---|
 | creative_fatigue | campaign | frequency up > 30% **and** CTR down > 20% | Δ mean daily profit | S1 · CMP-01 |
-| metric_shift / positive_spike | campaign | \|z\| ≥ 2.5 **and** \|Δprofit ÷ max(\|baseline profit\|, 10% of baseline spend)\| ≥ 15%; falling = shift, rising = spike | Δ mean daily profit | S7 · CMP-10 (spike); S3 knock-on |
+| metric_shift / positive_spike | campaign | \|z\| ≥ 2.5 **and** \|Δprofit ÷ max(\|baseline profit\|, 10% of baseline spend)\| ≥ 15%; falling = shift, rising = spike | Δ mean daily profit | S7 · CMP-10 (spike); S3 knock-on (CMP-02) |
 | cpc_spike | channel | CPC up > 25% **and** z > 2.5 | Δ channel daily profit | S3 · Google |
 | stockout_risk | SKU | days of cover < 7 **and** ad spend > 0 | −(daily gross margin at risk) | S2 · SKU-B |
-| conversion_drop | SKU | site CVR down > 15% **and** Welch t < −2.5 (14 vs 28 days) | −(lost CVR × sessions × unit margin) | S6 · SKU-D |
+| conversion_drop | SKU | site CVR down > 15% **and** Welch t < −2.5 (14 vs 28 days) | −(lost CVR × sessions × unit margin) | S6 · SKU-D; S7 knock-on (SKU-J) |
 | attribution_inflation | channel | platform conversions > store orders by > 10% | 0 (a data issue) | S5 · Meta, Google |
 
 If creative fatigue fires for a campaign, the profit check is skipped for it (no duplicate alert).
 
-**Severity** = M0 `severity_from_impact` (loss > ₹25k/day high, > ₹8k medium, else low; gains are always low), except `stockout_risk` is always **high** and `attribution_inflation` always **medium**. **Ranking**: by |₹ impact| descending, ties by severity then id. IDs `AN-001…` follow detection order; the stable identity across runs is the key `kind:entity_id`.
+**Severity** = M0 `severity_from_impact` (loss > ₹25k/day high, > ₹8k medium, else low), except `stockout_risk` is always **high** and `attribution_inflation` always **medium**. **Gains are rated too**: M0 calls every positive impact "low", so M3's `_sev()` overrides that for `positive_spike` and rates it by its *absolute* ₹ impact with the same cut-offs as a loss (CMP-10 at +₹13.7k/day is **medium**). The M0 helper is unchanged; the override lives only in M3. **Ranking**: by |₹ impact| descending, ties by severity then id. IDs `AN-001…` follow detection order; the stable identity across runs is the key `kind:entity_id`.
 
 ## Output of this run
 
@@ -625,7 +625,7 @@ If creative fatigue fires for a campaign, the profit check is skipped for it (no
 ID     kind                   entity       change      stat      ₹/day  severity direction
 AN-005 stockout_risk          SKU-B        -80.4%   z=-2.50    -₹1.56L  high     loss
 AN-004 cpc_spike              google       +56.1%   z=28.25    -₹25.7k  high     loss
-AN-003 positive_spike         CMP-10      +631.0%    z=5.64     ₹13.7k  low      gain
+AN-003 positive_spike         CMP-10      +631.0%    z=5.64     ₹13.7k  medium   gain
 AN-006 conversion_drop        SKU-D        -18.5%   t=-3.79     -₹6.7k  low      loss
 AN-007 conversion_drop        SKU-J        -17.2%   t=-2.62     -₹6.4k  low      loss
 AN-002 metric_shift           CMP-02       -17.9%   z=-2.65     -₹3.1k  low      loss
@@ -634,7 +634,26 @@ AN-008 attribution_inflation  meta         +22.1%         —         ₹0  medi
 AN-009 attribution_inflation  google       +14.8%         —         ₹0  medium   loss
 ```
 
-**Evaluation against the answer key**: 7/7 planted pairs found (recall 1.00), precision 0.89, one knock-on (`metric_shift` CMP-02, the profit hit from the Google CPC spike), and **one unplanted alert** (`conversion_drop` SKU-J: the viral TikTok creative brings cold traffic that converts worse, so site CVR falls 17% as sessions rise 57%; it is real, just not planted). The check allows up to 2 unexplained extras.
+**Evaluation against the answer key**: **7/7** planted pairs found (recall 1.00), **precision 1.00**, **no false alarms**. Two alerts are not planted but are *real consequences* of planted scenarios, so they are classified as knock-ons rather than false alarms:
+
+| Knock-on | Cause | Why | `detail["related"]` |
+|---|---|---|---|
+| `metric_shift` CMP-02 | S3 Google CPC spike | the CPC jump eats the Google campaign's profit | `["cpc_spike:google"]` |
+| `conversion_drop` SKU-J | S7 viral creative on CMP-10 | viral cold traffic converts worse | `["positive_spike:CMP-10"]` |
+
+`detail["related"]` holds the stable key(s) of the causing anomaly. The brain event payload carries it, so the UI can draw a pulse from the cause to the knock-on (Google cluster → CMP-02, CMP-10 → SKU-J); M4 uses the same field. The links are rule-based (a loss on a campaign whose channel has a `cpc_spike`; a conversion drop on a SKU whose campaign has a `positive_spike`), never read from the answer key. The same result holds on other random seeds (7, 123: 7/7, no false alarms).
+
+### Why CMP-06 is *not* flagged (and that is correct)
+
+Trail Max's Google campaign CMP-06 is a knock-on candidate: its profit really does fall from ₹13.5k to ₹6.7k/day (−50%), comfortably past the 15% size gate. But a small campaign has very noisy daily profit (daily std ≈ ₹7k on a ₹13k mean), so the drop is **not statistically significant**: robust z = **−1.08**, well under the 2.5 gate. CMP-07 behaves the same (−40%, z = −1.45). This is the two-gate rule doing its job; alerting on it would mean alerting on noise. It is deliberately **not** an expected alert.
+
+### The SKU-J insight: viral traffic converts worse
+
+The viral TikTok creative on CMP-10 lifts SKU-J's paid orders ~60% and sessions ~57%, but site conversion *falls* 17% (t = −2.62): cold viral audiences browse more and buy less. So the spike is real but the traffic is lower quality than usual. **Scale it carefully**: expect marginal returns to fall as you add budget, and watch SKU-J's site CVR while you do.
+
+### How the stockout z-score is computed
+
+`stockout_risk` is gated by *cover < 7 days and ad spend > 0*; its z is informational. For SKU-B: mean cover over the last 7 days = 8.62, median of the previous 21 days = 25.52, MAD × 1.4826 = 8.95, so `z = (8.62 − 25.52) ÷ 8.95 × √7 ÷ 2 = −2.498`. It is **not clipped or defaulted**: it prints as −2.50 only because of 2-decimal rounding (tests recompute it from the table). The baseline here is a steady decline, so its MAD is large and z looks modest even though cover dropped 80%; that is why stock alerts rely on the cover threshold, not on z.
 
 ## Edge cases
 
@@ -646,8 +665,9 @@ AN-009 attribution_inflation  google       +14.8%         —         ₹0  medi
 | Duplicate alerts for one problem | Fatigue suppresses the profit check on the same campaign; one key per `kind:entity` |
 | Zero clicks or sessions | Ratios use `safe_div` / `max(den, 1)`: never inf, never a crash |
 | New creatives | `new_creative` and `creative_ids_recent` are attached to profit alerts so a spike is explained (CMP-10 → CR-10b) |
-| Over-sensitivity | Two gates + a robust statistic; small noisy campaigns (CMP-06, CMP-07) are *not* flagged even when their profit halves, because the change is not statistically significant |
-| Different data (seeds 7 and 123) | Regenerated and re-run in tests: all 7 pairs still found |
+| Over-sensitivity | Two gates + a robust statistic; small noisy campaigns (CMP-06, CMP-07) are *not* flagged even when their profit halves, because the change is not statistically significant (see above) |
+| Knock-on effects | Linked to their cause via `detail["related"]` and classified in the evaluation, so a consequence is never confused with an unexplained alert |
+| Different data (seeds 7 and 123) | Regenerated and re-run in tests: all 7 pairs still found, no false alarms |
 
 ## Neural Brain integration
 
@@ -663,7 +683,7 @@ AN-009 attribution_inflation  google       +14.8%         —         ₹0  medi
 
 Targets hit by several anomalies merge: `anomaly_ids` list, top = largest |₹ impact| (a stock lock wins), highest severity, summed own impact.
 
-**Diagnose pulses**: one `anomaly` brain event (region `diagnose`, path `ingest → diagnose`) per alert, but **only when the key is new, the severity got worse, or |₹ impact| grew by more than 25%** since last seen. A first run on fresh state logs one per alert; an immediate re-run logs none. Keys that stop firing are dropped from `active_anomalies` and listed as `resolved` (no event for resolved in this module). `emit_brain_events=False` logs nothing and leaves state untouched.
+**Diagnose pulses**: one `anomaly` brain event (region `diagnose`, path `ingest → diagnose`; payload includes `related`, the cause keys, for cause → knock-on pulses) per alert, but **only when the key is new, the severity got worse, or |₹ impact| grew by more than 25%** since last seen. A first run on fresh state logs one per alert; an immediate re-run logs none. Keys that stop firing are dropped from `active_anomalies` and listed as `resolved` (no event for resolved in this module). `emit_brain_events=False` logs nothing and leaves state untouched.
 
 **`detection_quality`** (in `state.json`) stores the answer-key evaluation and powers the "7/7 detected" badge.
 

@@ -6,6 +6,10 @@ and powers the "7/7 detected" badge.
 
 M3-detectable scenarios: S1, S2, S3, S5 (two channels), S6, S7 = 7 expected (kind, entity) pairs.
 S4 (under-funded) and S8 (untested opportunity) belong to the optimiser (M5 / M5b).
+
+Knock-ons are allowed (not false alarms): metric_shift on a Google campaign inside the S3 window, and
+conversion_drop on the SKU promoted by the S7 campaign. CMP-06 is NOT expected: its profit drop is too
+noisy to pass the significance gate (z ≈ −1.08), which is the two-gate rule working as designed.
 """
 from __future__ import annotations
 
@@ -26,7 +30,11 @@ SCENARIO_KIND = {
     "price_change": "conversion_drop",
     "positive_spike": "positive_spike",
 }
-KNOCK_ON_SCENARIO = "S3"  # Google CPC spike: profit shifts on Google campaigns are a known consequence
+# Known knock-on effects: real consequences of a planted scenario, so not false alarms.
+#   S3: a profit drop (metric_shift) on a Google campaign inside the S3 window
+#   S7: a conversion drop on the SKU promoted by the viral campaign (cold viral traffic converts worse)
+KNOCK_ON_S3 = ("S3", "knock-on of S3")
+KNOCK_ON_S7 = ("S7", "viral cold traffic converts worse")
 
 
 def load_ground_truth() -> dict:
@@ -74,16 +82,25 @@ def evaluate(anomalies: list[Anomaly], evaluated_at: str | None = None) -> dict:
         }
     found = sum(p in by_pair for p in expected_all)
 
-    # Known knock-on effects: profit drops on Google campaigns inside the S3 window.
-    s3 = next((s for s in manifest["scenario_timeline"] if s["scenario"] == KNOCK_ON_SCENARIO), None)
+    timeline = {t["scenario"]: t for t in manifest["scenario_timeline"]}
     channel_of = {n["entity_id"]: n["channel"] for n in manifest["neurons"] if n["entity_type"] == "campaign"}
+    sku_of = {n["entity_id"]: n["sku_id"] for n in manifest["neurons"] if n["entity_type"] == "campaign"}
+
+    def inside(a: Anomaly, scenario: str) -> bool:
+        t, end = timeline.get(scenario), a.detail.get("window", {}).get("recent_end")
+        return bool(t and end and t["start_date"] <= end <= t["end_date"])
+
+    s3_channel = truth["S3"]["channel"]
+    s7_sku = sku_of.get(truth["S7"]["campaign"])
     extras = [a for a in anomalies if (a.kind, a.entity_id) not in set(expected_all)]
     knock_on, false_alarms = [], []
     for a in extras:
-        window = a.detail.get("window", {})
-        inside = bool(s3 and window.get("recent_end") and s3["start_date"] <= window["recent_end"] <= s3["end_date"])
-        if a.kind == "metric_shift" and channel_of.get(a.entity_id) == truth[KNOCK_ON_SCENARIO]["channel"] and inside:
-            knock_on.append({**_brief(a), "reason": "knock-on of S3"})
+        if a.kind == "metric_shift" and channel_of.get(a.entity_id) == s3_channel and inside(a, KNOCK_ON_S3[0]):
+            knock_on.append({**_brief(a), "reason": KNOCK_ON_S3[1], "scenario": KNOCK_ON_S3[0],
+                             "related": a.detail.get("related", [])})
+        elif a.kind == "conversion_drop" and a.entity_id == s7_sku and inside(a, KNOCK_ON_S7[0]):
+            knock_on.append({**_brief(a), "reason": KNOCK_ON_S7[1], "scenario": KNOCK_ON_S7[0],
+                             "related": a.detail.get("related", [])})
         else:
             false_alarms.append(_brief(a))
 

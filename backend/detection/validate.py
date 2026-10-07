@@ -21,7 +21,7 @@ from backend.detection.evaluate import evaluate, expected_pairs, load_ground_tru
 from backend.detection.runner import run_detection
 
 FIXED_AS_OF = "2026-10-06T23:00:00"
-MAX_FALSE_ALARMS = 2
+MAX_FALSE_ALARMS = 0  # every extra alert must be a classified knock-on
 MAX_RUNTIME_S = 1.0
 CPC_RANGE = (0.45, 0.75)
 PRICE_CHANGE_TARGET, PRICE_CHANGE_TOL = 0.15, 0.02
@@ -46,9 +46,11 @@ def check_planted_detected(ctx):
 
 
 def check_false_alarms(ctx):
-    fa = ctx["result"]["quality"]["false_alarms"]
+    q = ctx["result"]["quality"]
+    fa = q["false_alarms"]
     names = ", ".join(f"{a['kind']}:{a['entity_id']}" for a in fa) or "none"
-    return len(fa) <= MAX_FALSE_ALARMS, f"{len(fa)} unexplained extras ({names})"
+    knock = ", ".join(f"{k['entity_id']} ({k['scenario']})" for k in q["knock_on"]) or "none"
+    return len(fa) <= MAX_FALSE_ALARMS, f"{len(fa)} false alarms ({names}) · knock-on: {knock}"
 
 
 def check_sorted(ctx):
@@ -149,9 +151,39 @@ def check_brain_events(ctx):
         finally:
             config.STATE_PATH = original
     n = len(ctx["alerts"])
-    ok = (len(events) == n and first["events_logged"] == n and second["events_logged"] == 0 and active == n
+    sku_j = next((e for e in events if e["payload"]["key"] == "conversion_drop:SKU-J"), {})
+    related_ok = sku_j.get("payload", {}).get("related") == ["positive_spike:CMP-10"]
+    ok = (related_ok and len(events) == n and first["events_logged"] == n and second["events_logged"] == 0 and active == n
           and all(e["type"] == "anomaly" and e["region"] == "diagnose" and e["path"] == ["ingest", "diagnose"] for e in events))
-    return ok, f"run 1 logged {first['events_logged']}/{n} diagnose events, run 2 logged {second['events_logged']}"
+    return ok, (f"run 1 logged {first['events_logged']}/{n} diagnose events, run 2 logged "
+                f"{second['events_logged']}; SKU-J payload related={sku_j.get('payload', {}).get('related')}")
+
+
+def check_sku_j_knock_on(ctx):
+    a = _find(ctx, "conversion_drop", "SKU-J")
+    knock = {k["entity_id"]: k for k in ctx["result"]["quality"]["knock_on"]}
+    ok = (a is not None and a["detail"]["related"] == ["positive_spike:CMP-10"] and "SKU-J" in knock
+          and knock["SKU-J"]["scenario"] == "S7" and "CMP-02" in knock)
+    return ok, "SKU-J conversion_drop = knock-on of S7, related " + (str(a["detail"]["related"]) if a else "—")
+
+
+def check_gain_severity(ctx):
+    a = _find(ctx, "positive_spike", "CMP-10")
+    return bool(a and a["severity"] == "medium"), f"CMP-10 +₹{a['profit_impact']:,.0f}/day → {a['severity'] if a else '—'}"
+
+
+def check_related_links(ctx):
+    cmp02 = _find(ctx, "metric_shift", "CMP-02")
+    others = [a["id"] for a in ctx["alerts"] if a["detail"]["related"] and (a["kind"], a["entity_id"]) not in
+              {("metric_shift", "CMP-02"), ("conversion_drop", "SKU-J")}]
+    ok = bool(cmp02 and cmp02["detail"]["related"] == ["cpc_spike:google"]) and not others
+    return ok, f"CMP-02 → {cmp02['detail']['related'] if cmp02 else '—'}; no other alert has a cause link"
+
+
+def check_no_cmp06_expectation(ctx):
+    """CMP-06 must NOT be flagged: its profit drop is real but too noisy to pass the significance gate."""
+    flagged = _find(ctx, "metric_shift", "CMP-06")
+    return flagged is None, "CMP-06 not flagged (two-gate rule: z ≈ −1.08 < 2.5)"
 
 
 def check_recall(ctx):
@@ -161,7 +193,7 @@ def check_recall(ctx):
 
 CHECKS: list[tuple[str, Callable[[dict], tuple[bool, str]]]] = [
     ("1  planted pairs detected", check_planted_detected),
-    ("2  false-alarm control", check_false_alarms),
+    ("2  false alarms == 0", check_false_alarms),
     ("3  sorted by impact", check_sorted),
     ("4  M0 shape", check_shapes),
     ("5  severities", check_severities),
@@ -175,6 +207,10 @@ CHECKS: list[tuple[str, Callable[[dict], tuple[bool, str]]]] = [
     ("13 anomalies + brain_alerts", check_tables),
     ("14 brain events + dedupe", check_brain_events),
     ("15 recall == 1.0", check_recall),
+    ("16 SKU-J knock-on of S7", check_sku_j_knock_on),
+    ("17 gain severity (CMP-10)", check_gain_severity),
+    ("18 related links", check_related_links),
+    ("19 CMP-06 not expected", check_no_cmp06_expectation),
 ]
 
 

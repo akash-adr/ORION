@@ -33,6 +33,7 @@ from backend.core.config import (
 )
 from backend.core.db import read_table
 from backend.core.schema import Anomaly
+from backend.detection.store import anomaly_key
 
 KIND_DISPLAY = {
     "creative_fatigue": "Creative fatigue",
@@ -94,11 +95,18 @@ def robust_z(recent_values, baseline_values) -> float:
 
 
 def _sev(profit_impact: float, kind: str) -> str:
-    """Severity from ₹/day impact (M0 severity_from_impact); stockout is always high, attribution medium."""
+    """Severity from ₹/day impact; stockout is always high, attribution always medium.
+
+    Losses use M0 `severity_from_impact` unchanged. M3 overrides it for a positive_spike: a gain is rated
+    by its ABSOLUTE impact with the same cut-offs as a loss (M0 rates every gain "low"), so a +₹13.7k/day
+    spike is "medium": big wins deserve attention too. The M0 helper itself is not modified.
+    """
     if kind == "stockout_risk":
         return "high"
     if kind == "attribution_inflation":
         return "medium"
+    if kind == "positive_spike":
+        return m.severity_from_impact(-abs(profit_impact))
     return m.severity_from_impact(profit_impact)
 
 
@@ -142,7 +150,7 @@ def _make(kind: str, entity_type: str, entity_id: str, name: str, metric: str, b
           change: float, z: float, impact: float, direction: str, window: dict, detail: dict,
           value_digits: int = 2) -> Anomaly:
     """Build an Anomaly with rounding and the mandatory detail keys (id is assigned in detect_all)."""
-    detail = {**detail, "direction": direction, "window": window}
+    detail = {"related": [], **detail, "direction": direction, "window": window}
     return Anomaly(
         id="", kind=kind, entity_type=entity_type, entity_id=entity_id, label=_label(kind, name), metric=metric,
         baseline=round(float(baseline), value_digits), recent=round(float(recent), value_digits),
@@ -313,6 +321,34 @@ def detect_attribution(reconciliation: pd.DataFrame, fact: pd.DataFrame) -> list
 
 
 # ---------------------------------------------------------------------------
+# Knock-on links
+# ---------------------------------------------------------------------------
+def link_related(found: list[Anomaly], dim_campaign: pd.DataFrame) -> None:
+    """Point each knock-on at the stable key of its cause: detail["related"] = [cause key, ...].
+
+    Rule-based (never reads the answer key):
+      - metric_shift on a campaign whose channel has a cpc_spike  → related cpc_spike:<channel>
+        (a competitor-driven CPC jump eats the campaign's profit)
+      - conversion_drop on a SKU promoted by a campaign with a positive_spike → related
+        positive_spike:<campaign> (a viral creative brings cold traffic that converts worse)
+    The UI draws a pulse from the cause to the knock-on (Google cluster → CMP-02, CMP-10 → SKU-J).
+    """
+    present = {anomaly_key(a) for a in found}
+    channel_of = dim_campaign.set_index("campaign_id")["channel"].to_dict()
+    campaigns_of_sku = dim_campaign.groupby("sku_id")["campaign_id"].apply(sorted).to_dict()
+    for a in found:
+        if a.kind == "metric_shift" and a.entity_type == "campaign":
+            cause = f"cpc_spike:{channel_of.get(a.entity_id)}"
+            if cause in present:
+                a.detail["related"] = [cause]
+        elif a.kind == "conversion_drop" and a.entity_type == "sku":
+            causes = [f"positive_spike:{c}" for c in campaigns_of_sku.get(a.entity_id, [])
+                      if f"positive_spike:{c}" in present]
+            if causes:
+                a.detail["related"] = causes
+
+
+# ---------------------------------------------------------------------------
 # Assembly
 # ---------------------------------------------------------------------------
 def detect_all() -> list[Anomaly]:
@@ -325,6 +361,7 @@ def detect_all() -> list[Anomaly]:
         + detect_skus(fact, sku_daily, read_table("dim_sku"), read_table("events"))
         + detect_attribution(read_table("reconciliation"), fact)
     )
+    link_related(found, read_table("dim_campaign"))
     for i, a in enumerate(found, start=1):
         a.id = f"AN-{i:03d}"
     return sorted(found, key=lambda a: (-abs(a.profit_impact), SEVERITY_RANK[a.severity], a.id))
