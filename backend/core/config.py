@@ -225,3 +225,21 @@ STOCK_FACTOR_MIN = 0.5  # ... lower clip
 STOCK_FACTOR_MAX = 1.5  # ... upper clip
 HEADROOM_SCALE_POAS = 1.1  # marginal POAS above this → "scale"
 HEADROOM_CUT_POAS = 0.9  # below this → "cut"; between → "hold"
+
+# ---------------------------------------------------------------------------
+# 2.15 Recommendations (added for M6, additive)
+# ---------------------------------------------------------------------------
+CONF_BASE = 0.55  # confidence before any evidence
+CONF_Z_WEIGHT = 0.08  # + per unit of |z| (capped), a stronger signal earns more confidence
+CONF_Z_CAP = 4.0  # |z| beyond this adds nothing
+CONF_UNC_WEIGHT = 0.15  # − per unit of curve uncertainty (a poorly-determined response curve earns less)
+CONF_MAPE_WEIGHT = 0.5  # confidence is scaled by (1 − 0.5 × MAPE) once M7 has measured how wrong we were
+RISK_MEDIUM_SHIFT = 0.10  # budget shift above 10% = medium risk
+URGENCY_BONUS = 5000  # added to priority for high-risk (urgent) items
+STOCKOUT_HORIZON_DAYS = 14  # inventory_protect values ad spend over this horizon
+STOCKOUT_AD_CUT = 0.60  # inventory_protect cuts SKU ads by 60%
+POSITIVE_SCALE_UP = 0.30  # scale winners +30% (bounded by optimizer bounds)
+PLAN_SCALE_THRESHOLD = 1.15  # optimizer plan > 115% of current → scale_up
+PLAN_CUT_THRESHOLD = 0.85  # optimizer plan < 85% of current → budget_cut
+OPP_LAUNCH_N = 2  # top opportunities turned into launch tests
+OPP_IMPACT_HAIRCUT = 0.6  # expected test value = (pred POAS − 1) × budget × 0.6
