@@ -196,3 +196,18 @@ CHANNEL_DISPLAY = {"meta": "Meta", "google": "Google", "amazon": "Amazon", "tikt
 CAUSAL_CHART_DAYS = 45  # days of actual vs counterfactual returned for the chart
 CAUSAL_CI_Z = 1.96  # 95% interval
 CAUSAL_MIN_PRE_DAYS = 21  # minimum pre-period days to fit weights
+
+# ---------------------------------------------------------------------------
+# 2.13 Optimizer & simulator (added for M5, additive)
+# ---------------------------------------------------------------------------
+CURVE_POINTS = 40  # points returned per curve for the UI chart
+CURVE_B_MIN_MULT = 0.05  # b lower bound = 5% of mean spend
+CURVE_B_MAX_MULT = 50.0  # b upper bound = 50× mean spend
+SATURATION_MULT = 3.0  # saturation spend ≈ 3b
+OPTIMIZER_MAX_ITER = 500  # SLSQP iteration limit
+OVERSTOCK_COVER_DAYS = 60  # clear_inventory: SKUs above 60 days of cover may grow to 2×
+OVERSTOCK_UPPER_MULT = 2.0  # ... that upper multiple of current spend
+CLEAR_INV_PIVOT_DAYS = 30  # clear_inventory weight = 1 + clip((cover − 30)/30, 0, 1.5)
+CLEAR_INV_MAX_BONUS = 1.5  # ... capped at this bonus
+LAUNCH_TEST_RESERVE = 0.05  # launch_sku: 5% of budget reserved for M5b tests
+SIMULATE_MAX_MS = 300  # simulator must answer within 300 ms
