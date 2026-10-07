@@ -289,6 +289,7 @@ log_brain_event(make_brain_event("anomaly", entity_id="CMP-01", ref_id="AN-001",
 | 2026-10-07 | Appended `RECON_GAP_THRESHOLD = 0.10`, `REFRESH_MINUTES = 5`, `FRESHNESS_WARN_MINUTES = 15` to `config.py` | M2 flags reconciliation gaps (S5); the demo loop and stale-data badge need shared intervals |
 | 2026-10-07 | Added `neuron_metrics`, `source_status`, `data_quality` to `db.TABLE_COLUMNS` | The Neural Brain needs live per-neuron numbers and per-stream status; data-quality results must be stored and shown |
 | 2026-10-07 | Appended `FATIGUE_FREQ_UP`, `FATIGUE_CTR_DOWN`, `CPC_SPIKE_MIN`, `SKU_RECENT_DAYS`, `SKU_BASELINE_DAYS`, `PROFIT_BASE_FLOOR`, `MAD_SCALE` to `config.py` | M3 detectors need shared, documented thresholds (fatigue, CPC spike, 14/28-day site-conversion windows, robust-z scaling) so no module hard-codes them |
+| 2026-10-07 | Appended `CHANNEL_DISPLAY` to `config.py` (meta → "Meta", tiktok → "TikTok", …) | `str.title()` produced "Tiktok" in campaign names and alert labels; every label in M1/M2/M3 now uses one shared display map |
 | 2026-10-07 | Added `anomalies`, `brain_alerts` to `db.TABLE_COLUMNS`; added `active_anomalies`, `detection_quality` to `default_state()` (old state files gain them via `load_state`) | M3 persists detection results, maps them onto brain targets (neuron / cluster / source), emits Diagnose pulses only for new or worsening anomalies, and stores the ground-truth evaluation for the "7/7 detected" badge |
 
 ## 12. Assumptions
@@ -322,7 +323,7 @@ _(Team: add assumptions here as they are made.)_
 
 ```bash
 python -m backend.generator.generate    # writes 12 files into data/raw/
-python -m backend.generator.validate    # 15-point PASS/FAIL table, exit 1 on any failure
+python -m backend.generator.validate    # 16-point PASS/FAIL table, exit 1 on any failure
 python -m pytest -q                     # M0 + M1 tests (M1 generates into a temp folder)
 ```
 
@@ -450,7 +451,7 @@ M2 is the Neural Brain's **Ingest lobe**. It pulls every source through one conn
 python -m backend.ingest.pipeline                     # build all tables + log 10 ingest brain events
 python -m backend.ingest.pipeline --no-brain-events   # same, without touching state.json
 python -m backend.ingest.pipeline --as-of 2026-10-06T23:00:00
-python -m backend.ingest.validate                     # 16-point PASS/FAIL table (no brain events on the real state)
+python -m backend.ingest.validate                     # 17-point PASS/FAIL table (no brain events on the real state)
 python -m pytest -q                                   # M0 + M1 + M2 tests (temp folders only)
 ```
 
@@ -577,7 +578,7 @@ M3 is the Neural Brain's **Diagnose lobe**. It watches every campaign, channel a
 ```bash
 python -m backend.detection.detectors                    # detect, persist, pulse the brain, print the alerts
 python -m backend.detection.detectors --no-brain-events  # same, without touching state.json
-python -m backend.detection.validate                     # 15-point PASS/FAIL table (never touches the real state.json)
+python -m backend.detection.validate                     # 21-point PASS/FAIL table (never touches the real state.json)
 python -m pytest -q                                      # M0–M3 tests (temp folders only)
 ```
 
@@ -681,7 +682,9 @@ The viral TikTok creative on CMP-10 lifts SKU-J's paid orders ~60% and sessions 
 | `cpc_spike` | `cluster` = the channel (the whole Google cluster glows) |
 | `attribution_inflation` | `source` = `meta_ads` / `google_ads`; never individual neurons (it is a data issue, already shown by trust rings) |
 
-Targets hit by several anomalies merge: `anomaly_ids` list, top = largest |₹ impact| (a stock lock wins), highest severity, summed own impact.
+Targets hit by several anomalies merge: `anomaly_ids` list, top = largest |₹ impact| (a stock lock wins), highest severity, summed own impact. A knock-on's `message` names its cause ("Profit drop · Google · Summer Sneakers · interest — caused by CPC spike · Google").
+
+**Display names**: every label in M1/M2/M3 (campaign names, source and cluster labels, alert labels, brain event messages) uses `config.CHANNEL_DISPLAY` (meta → Meta, tiktok → TikTok, …), never `str.title()`, which produced "Tiktok". Each module's validator checks that no label says "Tiktok".
 
 **Diagnose pulses**: one `anomaly` brain event (region `diagnose`, path `ingest → diagnose`; payload includes `related`, the cause keys, for cause → knock-on pulses) per alert, but **only when the key is new, the severity got worse, or |₹ impact| grew by more than 25%** since last seen. A first run on fresh state logs one per alert; an immediate re-run logs none. Keys that stop firing are dropped from `active_anomalies` and listed as `resolved` (no event for resolved in this module). `emit_brain_events=False` logs nothing and leaves state untouched.
 

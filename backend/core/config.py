@@ -184,3 +184,8 @@ SKU_RECENT_DAYS = 14  # site-conversion checks use 14 recent days (slow-moving w
 SKU_BASELINE_DAYS = 28  # ... vs the 28 days before that
 PROFIT_BASE_FLOOR = 0.10  # % change base for profit = max(|baseline profit|, 10% of baseline spend)
 MAD_SCALE = 1.4826  # MAD → standard-deviation equivalent
+
+# ---------------------------------------------------------------------------
+# 2.11 Display names (added for M1–M3 labels, additive)
+# ---------------------------------------------------------------------------
+CHANNEL_DISPLAY = {"meta": "Meta", "google": "Google", "amazon": "Amazon", "tiktok": "TikTok", "programmatic": "Programmatic"}  # human-readable channel names for every label (never str.title(): it yields "Tiktok")

@@ -27,7 +27,7 @@ from scipy import stats
 
 from backend.core import metrics as m
 from backend.core.config import (
-    BASELINE_DAYS, CHANNELS, CPC_SPIKE_MIN, FATIGUE_CTR_DOWN, FATIGUE_FREQ_UP, MAD_SCALE, MIN_PCT_CHANGE,
+    BASELINE_DAYS, CHANNEL_DISPLAY, CHANNELS, CPC_SPIKE_MIN, FATIGUE_CTR_DOWN, FATIGUE_FREQ_UP, MAD_SCALE, MIN_PCT_CHANGE,
     PROFIT_BASE_FLOOR, RECENT_DAYS, RECON_GAP_THRESHOLD, SKU_BASELINE_DAYS, SKU_RECENT_DAYS,
     STOCK_COVER_RISK_DAYS, Z_THRESHOLD,
 )
@@ -229,7 +229,7 @@ def detect_channels(fact: pd.DataFrame) -> list[Anomaly]:
             continue
         impact = _mean(rec_d["profit"]) - _mean(base_d["profit"])
         out.append(_make(
-            "cpc_spike", "channel", ch, ch.title(), "cpc", cpc_base or 0.0, cpc_recent or 0.0, cpc_change, z, impact,
+            "cpc_spike", "channel", ch, CHANNEL_DISPLAY[ch], "cpc", cpc_base or 0.0, cpc_recent or 0.0, cpc_change, z, impact,
             "loss", window,
             {"cpm_change": _change(_ratio(rec["spend"], rec["impressions"]) , _ratio(base["spend"], base["impressions"])),
              "ctr_change": _change(_ratio(rec["clicks"], rec["impressions"]), _ratio(base["clicks"], base["impressions"])),
@@ -312,7 +312,7 @@ def detect_attribution(reconciliation: pd.DataFrame, fact: pd.DataFrame) -> list
         if not r["inflation_pct"] > RECON_GAP_THRESHOLD:
             continue
         out.append(_make(
-            "attribution_inflation", "channel", ch, ch.title(), "platform_vs_store", float(r["store_orders"]),
+            "attribution_inflation", "channel", ch, CHANNEL_DISPLAY[ch], "platform_vs_store", float(r["store_orders"]),
             float(r["platform_conversions"]), float(r["inflation_pct"]), 0.0, 0.0, "loss", window,
             {"roas_platform": float(r["roas_platform"]), "roas_true": float(r["roas_true"]),
              "trust_score": float(r["trust_score"]), "inflation_pct": float(r["inflation_pct"]),

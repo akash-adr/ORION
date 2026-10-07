@@ -241,8 +241,19 @@ def check_brain_events(ctx):
         errors.append("ids not sequential")
     if not all(re.match(ID_PATTERNS["brain_event"], e["id"]) for e in events):
         errors.append("id pattern")
+    if any("Tiktok" in e["message"] for e in events):
+        errors.append("'Tiktok' in event message")
     detail = f"{len(events)} ingest events, {events[0]['id']}…{events[-1]['id']}" if events else "no events"
     return not errors, detail if not errors else f"{detail} · {errors}"
+
+
+def check_display_names(ctx):
+    t = ctx["tables"]
+    texts = (list(t["source_status"]["label"]) + list(t["source_status"]["detail"]) + list(t["neuron_metrics"]["label"])
+             + list(t["dim_campaign"]["campaign_name"]))
+    bad = [x for x in texts if "Tiktok" in x]
+    return not bad and any("TikTok" in x for x in texts), (
+        f"{len(texts)} labels, none say 'Tiktok'" if not bad else f"bad: {bad}")
 
 
 CHECKS: list[tuple[str, Callable[[dict], tuple[bool, str]]]] = [
@@ -262,6 +273,7 @@ CHECKS: list[tuple[str, Callable[[dict], tuple[bool, str]]]] = [
     ("14 source_status", check_source_status),
     ("15 data_quality", check_data_quality),
     ("16 brain events", check_brain_events),
+    ("17 display names", check_display_names),
 ]
 
 

@@ -92,6 +92,23 @@ def test_dates_in_range(raw):
     _ok(v.check_dates(raw))
 
 
+def test_display_names(raw):
+    _ok(v.check_display_names(raw))
+
+
+def test_channel_display_covers_every_channel_and_names_tiktok():
+    assert set(config.CHANNEL_DISPLAY) == set(config.CHANNELS)
+    assert config.CHANNEL_DISPLAY["tiktok"] == "TikTok"
+
+
+def test_campaign_names_use_display_names(raw):
+    camps = v.load(raw, "campaigns.csv").set_index("campaign_id")
+    assert camps.at["CMP-10", "campaign_name"] == "TikTok · Gym Flex · broad"
+    assert camps.at["CMP-01", "campaign_name"] == "Meta · Summer Sneakers · broad"
+    m = pd.read_json(raw / "brain_manifest.json", typ="series")
+    assert {s["label"] for s in m["sources"]} >= {"TikTok Ads", "Programmatic"}
+
+
 # ---------------------------------------------------------------- extra integrity tests
 def test_ground_truth_exact(raw):
     assert json.loads((raw / "ground_truth.json").read_text()) == {

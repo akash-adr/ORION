@@ -152,7 +152,8 @@ def check_brain_events(ctx):
             config.STATE_PATH = original
     n = len(ctx["alerts"])
     sku_j = next((e for e in events if e["payload"]["key"] == "conversion_drop:SKU-J"), {})
-    related_ok = sku_j.get("payload", {}).get("related") == ["positive_spike:CMP-10"]
+    related_ok = (sku_j.get("payload", {}).get("related") == ["positive_spike:CMP-10"]
+                  and not any("Tiktok" in e["message"] for e in events))
     ok = (related_ok and len(events) == n and first["events_logged"] == n and second["events_logged"] == 0 and active == n
           and all(e["type"] == "anomaly" and e["region"] == "diagnose" and e["path"] == ["ingest", "diagnose"] for e in events))
     return ok, (f"run 1 logged {first['events_logged']}/{n} diagnose events, run 2 logged "
@@ -186,6 +187,18 @@ def check_no_cmp06_expectation(ctx):
     return flagged is None, "CMP-06 not flagged (two-gate rule: z ≈ −1.08 < 2.5)"
 
 
+def check_precision(ctx):
+    q = ctx["result"]["quality"]
+    return q["precision"] == 1.0, f"precision {q['precision']:.2f} ({q['found']} found + {len(q['knock_on'])} knock-on of {len(ctx['alerts'])} alerts)"
+
+
+def check_display_names(ctx):
+    texts = [a["label"] for a in ctx["alerts"]] + list(ctx["tables"]["brain_alerts"]["message"])
+    bad = [t for t in texts if "Tiktok" in t]
+    has_tiktok = any("TikTok" in t for t in texts)
+    return not bad and has_tiktok, f"{len(texts)} labels/messages, none say 'Tiktok'" if not bad else f"bad: {bad}"
+
+
 def check_recall(ctx):
     q = evaluate(detect_all(), FIXED_AS_OF)
     return q["recall"] == 1.0, f"recall {q['recall']:.2f} · precision {q['precision']:.2f} · knock-on {[k['entity_id'] for k in q['knock_on']]}"
@@ -211,6 +224,8 @@ CHECKS: list[tuple[str, Callable[[dict], tuple[bool, str]]]] = [
     ("17 gain severity (CMP-10)", check_gain_severity),
     ("18 related links", check_related_links),
     ("19 CMP-06 not expected", check_no_cmp06_expectation),
+    ("20 precision == 1.00", check_precision),
+    ("21 display names", check_display_names),
 ]
 
 

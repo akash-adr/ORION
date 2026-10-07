@@ -93,14 +93,22 @@ def validate_targets(targets: list[dict], manifest: dict) -> None:
             raise ValueError(f"brain target {t['target_type']} {t['target_id']!r} is not in brain_manifest.json")
 
 
+def _message(top: Anomaly, label_of_key: dict[str, str]) -> str:
+    """The alert text; a knock-on carries its cause so the UI can show cause → effect."""
+    causes = [label_of_key[k] for k in top.detail.get("related", []) if k in label_of_key]
+    return f"{top.label} — caused by {' + '.join(causes)}" if causes else top.label
+
+
 def build_brain_alerts(anomalies: list[Anomaly], manifest: dict | None = None) -> pd.DataFrame:
     """One row per brain target currently alerting, merging every anomaly that hits it.
 
     top = the anomaly with the largest |profit_impact| (a stock lock always wins: it is high severity and
     the lock icon must show); top_severity = the highest severity; direction = top's direction;
-    profit_impact = sum of the target's own anomalies; stock_locked = any lock; message = top's label.
+    profit_impact = sum of the target's own anomalies; stock_locked = any lock; message = top's label (plus
+    "— caused by <cause label>" when the top anomaly is a knock-on).
     """
     manifest = manifest or load_manifest()
+    label_of_key = {anomaly_key(a): a.label for a in anomalies}
     merged: dict[tuple[str, str], list[tuple[Anomaly, dict]]] = {}
     for a in anomalies:
         for t in targets_for(a, manifest):
@@ -118,7 +126,7 @@ def build_brain_alerts(anomalies: list[Anomaly], manifest: dict | None = None) -
             "top_severity": max((a.severity for a, _ in items), key=SEVERITY_RANK.get),
             "direction": top.detail["direction"],
             "profit_impact": round(sum(a.profit_impact for a in own), 2),
-            "stock_locked": bool(lock), "message": top.label,
+            "stock_locked": bool(lock), "message": _message(top, label_of_key),
         })
     order = {"cluster": 0, "source": 1, "neuron": 2}
     rows.sort(key=lambda r: (order[r["target_type"]], r["target_id"]))

@@ -102,6 +102,17 @@ def test_brain_events(ctx):
     _ok(v.check_brain_events(ctx))
 
 
+def test_display_names(ctx):
+    _ok(v.check_display_names(ctx))
+
+
+def test_source_labels_use_display_names(ctx):
+    ss = ctx["tables"]["source_status"].set_index("source_id")
+    assert ss.at["tiktok_ads", "label"] == "TikTok Ads"
+    nm = ctx["tables"]["neuron_metrics"].set_index("entity_id")
+    assert nm.at["CMP-10", "label"] == "TikTok · Gym Flex · broad"
+
+
 # ---------------------------------------------------------------- connectors
 def test_missing_file_error_names_file(env):
     with pytest.raises(FileNotFoundError, match=r"nope\.csv.*backend\.generator\.generate"):

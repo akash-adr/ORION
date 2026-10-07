@@ -317,6 +317,19 @@ def check_dates(raw_dir: Path):
     return not bad, f"{lo} → {hi}" if not bad else f"out of range: {bad}"
 
 
+def check_display_names(raw_dir: Path):
+    """No label says "Tiktok" and every campaign_name starts with its channel's CHANNEL_DISPLAY name."""
+    camps = load(raw_dir, "campaigns.csv")
+    m = load_json(raw_dir, "brain_manifest.json")
+    texts = list(camps["campaign_name"]) + [n["label"] for n in m["neurons"]] + [s["label"] for s in m["sources"]] \
+        + [c["label"] for c in m["clusters"]] + [t["headline"] for t in m["scenario_timeline"]] \
+        + [b["beat"] for b in m["hero_story"]["steps"]]
+    bad = [t for t in texts if "Tiktok" in t]
+    prefix_bad = [r.campaign_id for r in camps.itertuples() if not r.campaign_name.startswith(config.CHANNEL_DISPLAY[r.channel])]
+    ok = not bad and not prefix_bad and any("TikTok" in t for t in texts)
+    return ok, f"{len(texts)} labels use CHANNEL_DISPLAY" if ok else f"bad: {bad}, prefix: {prefix_bad}"
+
+
 CHECKS: list[tuple[str, Callable[[Path], tuple[bool, str]]]] = [
     ("1  determinism", check_determinism),
     ("2  row counts", check_row_counts),
@@ -333,6 +346,7 @@ CHECKS: list[tuple[str, Callable[[Path], tuple[bool, str]]]] = [
     ("13 brain manifest", check_manifest),
     ("14 ID patterns", check_id_patterns),
     ("15 date range", check_dates),
+    ("16 display names", check_display_names),
 ]
 
 

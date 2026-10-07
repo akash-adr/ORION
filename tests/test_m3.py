@@ -169,6 +169,30 @@ def test_stockout_and_attribution_overrides(alerts):
         assert "server-side" in a.detail["recommended_fix"]
 
 
+def test_display_names_everywhere(env, alerts):
+    run_detection(as_of=AS_OF, emit_brain_events=False, verbose=False)
+    labels = [a.label for a in alerts] + list(read_table("brain_alerts")["message"])
+    assert not any("Tiktok" in t for t in labels)
+    assert pair(alerts, "positive_spike", "CMP-10").label == "Positive spike · TikTok · Gym Flex · broad"
+    assert pair(alerts, "cpc_spike", "google").label == "CPC spike · Google"
+    assert pair(alerts, "attribution_inflation", "meta").label == "Attribution inflation · Meta"
+    v.check_display_names({"alerts": [a.__dict__ for a in alerts],
+                           "tables": {"brain_alerts": read_table("brain_alerts")}})
+
+
+def test_precision_check(env):
+    ctx = v.build_context()
+    assert v.check_precision(ctx)[0] and v.check_display_names(ctx)[0]
+
+
+def test_brain_alert_message_names_the_cause(env, alerts):
+    ba = store.build_brain_alerts(alerts).set_index(["target_type", "target_id"])
+    assert ba.loc[("neuron", "CMP-02")]["message"].endswith("— caused by CPC spike · Google")
+    assert ba.loc[("neuron", "SKU-J")]["message"].endswith("— caused by Positive spike · TikTok · Gym Flex · broad")
+    assert "caused by" not in ba.loc[("neuron", "CMP-01")]["message"]
+    assert "caused by" not in ba.loc[("cluster", "google")]["message"]
+
+
 def test_every_alert_has_direction_and_window(alerts):
     for a in alerts:
         assert a.detail["direction"] in ("loss", "gain")

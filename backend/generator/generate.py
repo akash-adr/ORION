@@ -20,8 +20,8 @@ import pandas as pd
 
 from backend.core import config
 from backend.core.config import (
-    ACTION_TYPES, ANOMALY_KINDS, AUDIENCES, BRAIN_EVENT_TYPES, BRAIN_REGIONS, CHANNELS, END_DATE, N_DAYS,
-    RAW_DIR, SEED,
+    ACTION_TYPES, ANOMALY_KINDS, AUDIENCES, BRAIN_EVENT_TYPES, BRAIN_REGIONS, CHANNEL_DISPLAY, CHANNELS, END_DATE,
+    N_DAYS, RAW_DIR, SEED,
 )
 from backend.core.metrics import format_inr
 
@@ -60,6 +60,7 @@ for _ch in (*CPM, *CTR, *CH_CVR, *OVERLAP):
     assert _ch in CHANNELS, f"unknown channel {_ch!r}"
 for _aud in CVR_AUD:
     assert _aud in AUDIENCES, f"unknown audience {_aud!r}"
+assert set(CHANNEL_DISPLAY) == set(CHANNELS), "CHANNEL_DISPLAY must name every channel"
 
 # ---------------------------------------------------------------------------
 # 3. Campaigns: campaign_id, channel, sku_id, audience, daily_budget ₹, sat_mult, format
@@ -151,7 +152,7 @@ def build_campaigns(skus: pd.DataFrame) -> pd.DataFrame:
         columns=["campaign_id", "channel", "sku_id", "audience", "daily_budget", "sat_mult", "format"],
     )
     names = skus.set_index("sku_id")["name"]
-    df["campaign_name"] = [f"{c.title()} · {names[s]} · {a}" for c, s, a in zip(df["channel"], df["sku_id"], df["audience"])]
+    df["campaign_name"] = [f"{CHANNEL_DISPLAY[c]} · {names[s]} · {a}" for c, s, a in zip(df["channel"], df["sku_id"], df["audience"])]
     return df.sort_values("campaign_id", kind="stable").reset_index(drop=True)
 
 
@@ -393,11 +394,9 @@ def build_ground_truth() -> dict:
 # ---------------------------------------------------------------------------
 MANIFEST_VERSION = 1
 AD_SOURCE = {  # channel → (source id, label) of the data-stream node feeding its campaigns
-    "meta": ("meta_ads", "Meta Ads"),
-    "google": ("google_ads", "Google Ads"),
-    "amazon": ("amazon_ads", "Amazon Ads"),
-    "tiktok": ("tiktok_ads", "TikTok Ads"),
-    "programmatic": ("programmatic", "Programmatic"),
+    ch: (sid, CHANNEL_DISPLAY[ch] + ("" if ch == "programmatic" else " Ads"))
+    for ch, sid in (("meta", "meta_ads"), ("google", "google_ads"), ("amazon", "amazon_ads"),
+                    ("tiktok", "tiktok_ads"), ("programmatic", "programmatic"))
 }
 OTHER_SOURCES = [  # non-ad data streams; each feeds every SKU neuron
     {"id": "store", "label": "Store Orders", "kind": "store", "channel": None, "file": "orders.csv"},
@@ -405,8 +404,7 @@ OTHER_SOURCES = [  # non-ad data streams; each feeds every SKU neuron
     {"id": "ga4", "label": "GA4 Funnel", "kind": "analytics", "channel": None, "file": "ga_events.csv"},
     {"id": "pricing", "label": "Pricing", "kind": "pricing", "channel": None, "file": "pricing.csv"},
 ]
-CLUSTER_LABELS = {"meta": "Meta", "google": "Google", "amazon": "Amazon", "tiktok": "TikTok",
-                  "programmatic": "Programmatic", "catalog": "Product Catalog"}
+CLUSTER_LABELS = {**CHANNEL_DISPLAY, "catalog": "Product Catalog"}
 DIRECTIONS = ("gain", "loss")  # whether a stimulus / scenario helps or hurts profit
 
 
