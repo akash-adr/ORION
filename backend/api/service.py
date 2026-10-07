@@ -21,7 +21,7 @@ import logging
 import os
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
@@ -464,6 +464,14 @@ def opportunities() -> dict:
 # ---------------------------------------------------------------------------
 # Settings and ask
 # ---------------------------------------------------------------------------
+_NEXT_REFRESH: dict[str, str | None] = {"at": None}
+
+
+def schedule_next_refresh(delay_seconds: float | None) -> None:
+    """Called by whichever server runs the background loop: records when the next scheduled refresh will happen (None = not scheduled)."""
+    _NEXT_REFRESH["at"] = None if delay_seconds is None else (_now() + timedelta(seconds=delay_seconds)).strftime("%Y-%m-%dT%H:%M:%S")
+
+
 def get_settings() -> dict:
     """Autonomy, objective and the options, the refresh interval, demo mode, whether Claude is available (a boolean, never the key) and the last refresh."""
     s = load_state()
@@ -472,7 +480,7 @@ def get_settings() -> dict:
     agent._load_env()
     return _clean({"autonomy": s["autonomy"], "objective": s["objective"], "autonomy_modes": list(config.AUTONOMY_MODES),
                    "objectives": list(OBJECTIVES), "refresh_minutes": REFRESH_MINUTES, "demo_mode": DEMO_MODE,
-                   "agent": {"claude_available": bool(os.getenv("ANTHROPIC_API_KEY"))}, "last_refresh_at": s.get("last_refresh_at")})
+                   "agent": {"claude_available": bool(os.getenv("ANTHROPIC_API_KEY"))}, "last_refresh_at": s.get("last_refresh_at"), "next_refresh_at": _NEXT_REFRESH["at"]})
 
 
 def update_settings(autonomy: str | None = None, objective: str | None = None) -> dict:

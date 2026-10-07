@@ -1288,6 +1288,114 @@ Units moved -22% vs what would have happened anyway (synthetic control). Net mar
 
 *Claude was not exercised in this run (no `ANTHROPIC_API_KEY` in `.env`); with a key, the same questions go through the tool-calling loop and fall back to the answers above on any failure.*
 
+# Module 9 — Backend API & Continuous Loop
+
+> **One clean API runs the whole loop on a schedule — ingest, detect, decide, act, learn — and even has a zero-dependency backup server, so the demo can't fail on installation.**
+
+## Three layers
+
+```
+ ┌──────────────────────────┐   ┌──────────────────────────┐
+ │ backend/api/main.py      │   │ backend/api/devserver.py │   HTTP only: parse, call, map errors.
+ │ FastAPI + Pydantic       │   │ stdlib ThreadingHTTPServer│  One line per route. NO business logic.
+ └────────────┬─────────────┘   └────────────┬─────────────┘
+              └──────────────┬───────────────┘
+                 ┌───────────▼────────────┐
+                 │ backend/api/service.py │   All logic: caching, locking, JSON safety, the closed loop.
+                 └───────────┬────────────┘
+        M1 data → M2 ingest → M3 detect → M4 diagnose → M5 optimise → M6 decide/act → M7 learn   (M8 agent, M0 contract)
+```
+
+Both servers call the same service functions with the same parameters, so they return identical JSON (proved by validation check 02).
+
+## Endpoints (33)
+
+| Tag | Endpoint | Returns |
+|---|---|---|
+| Health | `GET /health` | `{ok, version}` |
+| KPIs & Data | `GET /kpis?period=7` · `/trend?days=45` · `/channels` · `/campaigns` · `/sources` · `/data-quality` | dashboard numbers, true vs platform ROAS, source trust |
+| Detection & Diagnosis | `GET /anomalies` · `/anomalies/{id}/diagnosis` · `/causal/{event_id}` · `/reconciliation` | alerts, waterfall + funnel + evidence, synthetic-control result |
+| Decisions | `GET /recommendations?objective=` · `POST /decisions/{id}/approve\|reject\|rollback` · `GET /audit` | the Decision Inbox, guarded execution, audit trail |
+| Optimizer | `POST /optimize` · `/simulate` · `/simulate/channels` · `GET /curves` · `/opportunities` | budget plans, what-ifs, response curves, ghost opportunities |
+| Learning | `GET /learning` | outcomes, accuracy, calibration, synapse strength |
+| Brain | `GET /brain/manifest` · `/brain/nodes` · `/brain/snapshot` · `/brain/events?since=&limit=` · `/brain/state` · `POST /brain/replay` | everything the 3D brain renders |
+| Settings | `GET/POST /settings` | autonomy, objective, refresh interval, `last_refresh_at`, `next_refresh_at`, `agent.claude_available` |
+| Agent | `POST /ask` | grounded answer + brain highlights |
+| Loop | `POST /refresh` · `POST /demo/reset` | run the loop now · reset the demo (DEMO_MODE only) |
+
+Interactive docs: `/docs` (Swagger) and `/openapi.json`. Frontend polling plan, button map and real example JSON: [`frontend/README-API.md`](frontend/README-API.md).
+
+## The continuous loop
+
+A background task runs `service.refresh()` every `REFRESH_MINUTES` (default 5; env override) in a worker thread. It does **not** refresh at startup (the demo state is already warm); errors are logged and swallowed; shutdown cancels it cleanly. `/settings.next_refresh_at` tells the UI when the next run is due. `POST /refresh` runs the same function on demand.
+
+| Step | What it does | Brain events it emits |
+|---|---|---|
+| ingest | M1 data → M2 clean, reconcile, trust-score | `ingest` |
+| detect | M3 anomaly detectors | `anomaly` per new alert |
+| diagnose | M4 waterfall, funnel, causal | `diagnosis` per alert |
+| optimize | M5 curves, plans, opportunities | none (feeds the decision step) |
+| decide | M6 rebuild the inbox; in `autonomous` mode auto-apply **only low-risk, unblocked** items | `recommendation`, plus `auto_apply` for each auto-applied item |
+| learn | M7 measure matured outcomes, adjust calibration and synapses | `outcome` |
+
+Each step is wrapped: if one raises, the others still run and the result is `{ok:false, steps:{detect:{ok:false,error}…}}`. A global `RLock` serialises the loop and every writing endpoint, so a refresh and an approval never write at once.
+
+## Caching and measured latency
+
+In-memory TTL cache keyed by (db path, state path, key), returning a copy; **every writer invalidates it**.
+
+| Cached | TTL | Why |
+|---|---|---|
+| anomalies | 300 s | detectors are the slowest read |
+| recommendations (per objective) | 300 s | building the inbox runs the optimiser |
+| opportunities | 3600 s | the model changes slowly |
+
+Never cached: simulate (must stay fast), settings, audit, brain events/state.
+
+Measured on the demo data (FastAPI via TestClient, warm unless noted; devserver is within a millisecond):
+
+| Route | ms |
+|---|---|
+| `/health`, `/anomalies`, `/audit`, `/settings`, `/brain/state` | ≈ 1 |
+| `POST /simulate`, `/simulate/channels` | ≈ 2 |
+| `/kpis`, `/channels`, `/brain/nodes` | 7–10 |
+| `/brain/snapshot` | ≈ 21 warm · ≈ 100 first call |
+| `/causal/{id}` | ≈ 47 |
+| `/anomalies/{id}/diagnosis` | ≈ 70 |
+| `POST /ask` (rules engine) | ≈ 72 |
+| `POST /brain/replay` | ≈ 112 |
+| `POST /refresh` (whole loop) | ≈ 410 |
+
+## JSON safety, errors, security, configuration
+
+- **JSON safety:** every payload passes through the M0 `to_dict` (numpy → Python, NaN / ±inf → `null`, timestamps → ISO). The devserver serialises with `allow_nan=False` and validation asserts no `NaN` / `Infinity` token ever appears.
+- **Errors:** unknown id → 404 `{"detail":"Not found: …"}`; invalid value → 400; malformed body → 422; anything else → logged server-side, `{"detail":"Internal server error"}`. Blocked or duplicate actions are 200 `{ok:false, reason}`.
+- **Security:** no endpoint returns the API key (only `agent.claude_available`); no traceback ever reaches a body (validation scans every response). CORS is `*` for the demo; **restrict `allow_origins` before production**. There is no authentication; this is a demo.
+- **Config:** `REFRESH_MINUTES` (5), `DEMO_MODE` (true; enables `/demo/reset`), `ANTHROPIC_API_KEY` (optional), `API_PORT` (8000).
+
+## Run
+
+```bash
+pip install -r requirements.txt
+uvicorn backend.api.main:app --port 8000          # primary
+python -m backend.api.devserver --port 8000       # fallback: standard library only
+python -m backend.api.validate                    # 20 checks over HTTP on BOTH servers (temp state)
+python -m pytest -q
+```
+
+## Validation (`python -m backend.api.validate`, 20 checks)
+
+Routes 2xx with valid JSON · GET parity between servers · `/docs` lists every route · 404 / 400 / 422 · approve (audit, outcome, events, spend, synapses) · approve twice · rollback restores · blocked decision · autonomous refresh applies only low-risk · objective switch · simulate < 300 ms with stock warning · ask highlights CMP-01 · snapshot shape and < 500 ms · brain state idle vs replay · replay is safe · events `since` ordering · demo reset · loop resilience · concurrency (refresh + approvals at once) · no secrets or tracebacks.
+
+## Demo-day checklist
+
+1. `python -m backend.api.validate` → 20/20 PASS.
+2. `curl localhost:8000/health`; open `/docs`.
+3. `POST /demo/reset` before every run; `ANTHROPIC_API_KEY` is optional (the offline rules engine answers without it).
+4. Frontend: `NEXT_PUBLIC_API_URL=http://localhost:8000`.
+5. If `uvicorn` fails to start for any reason: `python -m backend.api.devserver` — same URLs, same JSON.
+6. Port 8000 busy (the old `backend/app` scaffold uses it)? Pass `--port 8001` and update `NEXT_PUBLIC_API_URL`.
+
 ---
 
 ## Appendix: project scaffold (from setup)

@@ -5,3 +5,6 @@ scipy
 scikit-learn
 anthropic
 python-dotenv
+fastapi
+uvicorn[standard]
+httpx
