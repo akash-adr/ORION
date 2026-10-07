@@ -3,6 +3,7 @@
 No other module may hard-code any of these values; import them from here.
 Units: percentages are fractions (0.15 == 15%), money is float INR per day unless named otherwise.
 """
+import os
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -171,7 +172,7 @@ def validate_config() -> None:
 # 2.9 Ingestion (added for M2, additive)
 # ---------------------------------------------------------------------------
 RECON_GAP_THRESHOLD = 0.10  # |inflation_pct| above 10% = reconciliation gap; M3 raises attribution_inflation, M6 recommends server-side tracking
-REFRESH_MINUTES = 5  # auto-refresh interval for the demo loop
+REFRESH_MINUTES = int(os.getenv("REFRESH_MINUTES", "5"))  # auto-refresh interval for the demo loop (env-overridable; default kept at the original 5)
 FRESHNESS_WARN_MINUTES = 15  # last_synced older than this → stale warning badge
 
 # ---------------------------------------------------------------------------
@@ -276,3 +277,14 @@ AGENT_MAX_TOKENS = 700  # per Claude response
 AGENT_TOOL_RESULT_MAX_CHARS = 12000  # tool results are truncated to this many characters
 AGENT_MAX_WORDS = 120  # rules-engine answers are trimmed to this many words
 CLAUDE_MODEL_DEFAULT = "claude-sonnet-5-5"  # used when the CLAUDE_MODEL environment variable is not set
+
+# ---------------------------------------------------------------------------
+# 2.18 Service layer and closed loop (added for M9, additive)
+# ---------------------------------------------------------------------------
+CACHE_TTL_ANOMALIES = 300  # seconds an anomaly list may be served from the in-memory cache
+CACHE_TTL_RECOMMENDATIONS = 300  # ... the Decision Inbox
+CACHE_TTL_OPPORTUNITIES = 3600  # ... opportunities (the model changes slowly)
+BRAIN_MODE_WINDOW_SECONDS = 10  # /brain/state: the mode follows the latest event if it is newer than this
+TREND_DAYS_DEFAULT = 45  # days returned by the trend chart
+DEMO_MODE = os.getenv("DEMO_MODE", "true").lower() == "true"  # enables POST /demo/reset
+API_PORT = 8000  # port the API / dev server listens on

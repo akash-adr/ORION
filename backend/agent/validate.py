@@ -142,13 +142,19 @@ def check_read_only_tools():
         if hit or fn.__module__ != "backend.agent.agent":
             bad.append((name, sorted(hit)))
     writers = [getattr(engine, n) for n in FORBIDDEN] + [save_state, log_brain_event, write_table]
-    for module in (agent, service):
-        for obj in vars(module).values():
-            if any(obj is w for w in writers):
-                bad.append((module.__name__, getattr(obj, "__name__", "?")))
-    src = inspect.getsource(service) + inspect.getsource(agent)
-    bad += [f"source mentions {n}(" for n in ("engine.execute", "engine.approve", "engine.rollback", "engine.reject") if n in src]
-    return not bad, f"{len(agent.TOOLS)} tools, none can reach execute / approve / reject / rollback or any state write" if not bad else f"reachable: {bad}"
+    for obj in vars(agent).values():  # the agent module itself holds no writer
+        if any(obj is w for w in writers):
+            bad.append((agent.__name__, getattr(obj, "__name__", "?")))
+    # The service layer (M9) now legitimately has write functions; the agent may only call its READ-ONLY ones.
+    service_writers = {"approve", "reject", "rollback", "refresh", "update_settings", "brain_replay", "demo_reset", "invalidate"}
+    for name, tool in agent.TOOLS.items():
+        if (set(tool["fn"].__code__.co_names) & service_writers):
+            bad.append((name, "calls a service writer"))
+    src = inspect.getsource(agent)
+    bad += [f"agent source mentions {n}" for n in ("engine.execute", "engine.approve", "engine.rollback", "engine.reject",
+                                                    "service.approve", "service.reject", "service.rollback", "service.refresh", "service.demo_reset",
+                                                    "service.update_settings", "service.brain_replay", "service.recommendations(") if n in src]
+    return not bad, f"{len(agent.TOOLS)} tools, none can reach execute / approve / reject / rollback, a refresh or any state write" if not bad else f"reachable: {bad}"
 
 
 def check_word_limit():

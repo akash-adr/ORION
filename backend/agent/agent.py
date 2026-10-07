@@ -72,7 +72,7 @@ def t_explain_anomaly(anomaly_id: str) -> dict:
 
 
 def t_get_recommendations() -> dict:
-    r = service.recommendations()
+    r = service.pending_recommendations()  # strictly read-only: the agent never builds or saves decisions
     recs = [{"id": d["id"], "title": d["title"], "action_type": d["action"]["type"], "expected_profit_delta": d["expected_profit_delta"],
              "confidence": d["confidence"], "risk": d["risk"], "requires_approval": d["requires_approval"], "blocked": d["blocked"],
              "anomaly_id": d["anomaly_id"], "status": d["status"],

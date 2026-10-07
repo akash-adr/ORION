@@ -216,7 +216,7 @@ def test_answers_have_the_ui_fields():
 
 # ---------------------------------------------------------------- service layer
 def test_service_functions_are_json_serialisable():
-    outputs = [service.kpis(), service.kpis(period=14), service.anomalies(), service.diagnosis("AN-001"), service.recommendations(),
+    outputs = [service.kpis(), service.kpis(period=14), service.anomalies(), service.diagnosis("AN-001"), service.pending_recommendations(),
                service.causal(), service.causal("EV-2"), service.channel_simulate({"google": 1.2}), service.opportunities(),
                service.reconciliation(), service.learning()]
     for o in outputs:
@@ -236,12 +236,12 @@ def test_kpis_shape_and_values():
 def test_diagnosis_and_unknown_anomaly():
     d = service.diagnosis("AN-004")
     assert d["anomaly"]["kind"] == "cpc_spike" and d["root_cause"]["factors"] and "Auction cost" in d["root_cause"]["narrative"]
-    with pytest.raises(KeyError, match="Unknown anomaly 'AN-999'"):
+    with pytest.raises(KeyError, match="Not found: anomaly 'AN-999'"):
         service.diagnosis("AN-999")
 
 
 def test_recommendations_use_pending_state_or_a_fresh_build():
-    r = service.recommendations()  # fresh state: built, never saved
+    r = service.pending_recommendations()  # fresh state: built, never saved
     assert r["objective"] == "max_profit" and r["summary"]["count"] == 11 and r["recommendations"][0]["action"]["type"] == "inventory_protect"
     assert not load_state()["decisions"]  # building did not write state
 
@@ -254,8 +254,10 @@ def test_causal_default_event_and_unsupported_event():
 
 
 def test_opportunities_from_tables_and_from_the_model(monkeypatch):
+    service.invalidate()
     from_tables = service.opportunities()
     monkeypatch.setattr(service, "table_exists", lambda name: False)
+    service.invalidate()
     from_model = service.opportunities()
     assert from_tables["opportunities"][0]["label"] == from_model["opportunities"][0]["label"] == "Trail Max · Google · retargeting"
     assert from_tables["model_r2_holdout"] == pytest.approx(from_model["model_r2_holdout"], abs=1e-6)
@@ -271,7 +273,7 @@ def test_brain_targets_mapping():
 def test_service_never_writes_state(env):
     before = config.STATE_PATH.read_bytes() if config.STATE_PATH.exists() else None
     service.learning()  # an unseeded history is seeded in memory only
-    service.recommendations()
+    service.pending_recommendations()
     for q in agent.DEMO_QUESTIONS:
         agent.answer(q, force_rules=True)
     after = config.STATE_PATH.read_bytes() if config.STATE_PATH.exists() else None
@@ -382,7 +384,7 @@ def test_a_failing_tool_is_reported_to_the_model_not_raised():
     client = FakeClient([tool_use("explain_anomaly", {"anomaly_id": "AN-999"}), text("I could not find that anomaly.")])
     r = agent._claude("explain AN-999", client=client)
     result = client.calls[1]["messages"][-1]["content"][0]
-    assert result["is_error"] is True and "Unknown anomaly" in json.loads(result["content"])["error"]
+    assert result["is_error"] is True and "Not found: anomaly" in json.loads(result["content"])["error"]
     assert r["engine"] == "claude" and r["ids"] == []
 
 
