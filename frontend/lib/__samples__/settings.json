@@ -1,0 +1,1 @@
+{"autonomy":"supervised","objective":"max_profit","autonomy_modes":["advisory","supervised","autonomous"],"objectives":["max_profit","revenue_target","clear_inventory","launch_sku"],"refresh_minutes":5,"demo_mode":true,"agent":{"claude_available":false},"last_refresh_at":"2026-10-07T14:54:40","next_refresh_at":"2026-10-07T14:59:38"}

@@ -16,6 +16,8 @@ import { useBrainStore } from "./store";
 
 export interface BrainSceneProps {
   onRegionSelect?: (region: Region) => void;
+  /** Canvas background colour (defaults to the original near-black). */
+  background?: string;
   /** 0 = hero, 1 = dashboard. Drives brain scale / position. */
   scrollProgress?: MotionValue<number>;
 }
@@ -125,7 +127,7 @@ function Scene(props: BrainSceneProps) {
 
   return (
     <>
-      <color attach="background" args={[BACKGROUND]} />
+      <color attach="background" args={[props.background ?? BACKGROUND]} />
       <CameraControls
         ref={controls}
         makeDefault

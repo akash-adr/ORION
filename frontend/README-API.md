@@ -34,10 +34,12 @@ Events arrive oldest-first; play them in `id` order. Replayed events carry `payl
 | What-if campaign budgets | `POST /simulate` `{plan: {"CMP-01": 30000}}` |
 | Optimise | `POST /optimize` `{objective, total_budget?}` |
 | Ask the AI | `POST /ask` `{question}` → `{answer, engine, tools_used, highlights, note, duration_ms}`; light up `highlights` on the brain |
-| Run the loop now | `POST /refresh` |
+| Run the loop now | `POST /refresh` → `{ok, steps{name:{ok,duration_ms,events}}, auto_applied, outcomes_measured, events_logged, duration_ms}` |
 | Play the demo story | `POST /brain/replay` (then poll events as usual) |
 | Reset the demo | `POST /demo/reset` |
 | Click a neuron / alert | `GET /anomalies/{id}/diagnosis` |
+| Show the last loop run | `GET /loop/last` (same shape as `/refresh` plus `at`; `null` if the loop never ran) |
+| Explain a threshold | `GET /meta/config` (read-only detection, guardrail, optimizer and learning settings) |
 
 Errors are `{"detail": "..."}`: 404 unknown id, 400 invalid value, 422 malformed body, 500 never leaks internals. Blocked or duplicate
 actions are **not** errors: they return 200 `{ok:false, reason}`; show the reason.

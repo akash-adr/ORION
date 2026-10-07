@@ -1,0 +1,1468 @@
+{
+ "objective": "max_profit",
+ "preview": false,
+ "summary": {
+  "pending": 8,
+  "executed": 1,
+  "rejected": 1,
+  "rolled_back": 1,
+  "total_expected_profit_delta": 59414.67,
+  "needs_approval": 4,
+  "auto_eligible": 4,
+  "blocked": 0,
+  "plan_profit_delta": null
+ },
+ "recommendations": [
+  {
+   "id": "REC-51637e",
+   "title": "Trim loss-making campaigns",
+   "issue": "5 campaigns return less than ₹1 on the next rupee (marginal POAS 0.04 to 0.84)",
+   "cause": "Their response curves are past the point of diminishing returns: the optimizer cuts each toward the spend where the next rupee earns a rupee",
+   "action": {
+    "changes": [
+     {
+      "campaign_id": "CMP-11",
+      "name": "TikTok · Slide Comfort · interest",
+      "channel": "tiktok",
+      "from_budget": 10044.03,
+      "to_budget": 5030.0
+     },
+     {
+      "campaign_id": "CMP-12",
+      "name": "Programmatic · Office Loafer · broad",
+      "channel": "programmatic",
+      "from_budget": 18170.69,
+      "to_budget": 9090.0
+     },
+     {
+      "campaign_id": "CMP-13",
+      "name": "Amazon · Hiking Boot · interest",
+      "channel": "amazon",
+      "from_budget": 14759.26,
+      "to_budget": 9640.0
+     },
+     {
+      "campaign_id": "CMP-14",
+      "name": "Meta · Kids Glow · retargeting",
+      "channel": "meta",
+      "from_budget": 8133.24,
+      "to_budget": 5690.0
+     },
+     {
+      "campaign_id": "CMP-16",
+      "name": "Programmatic · Summer Sneakers · retargeting",
+      "channel": "programmatic",
+      "from_budget": 10121.78,
+      "to_budget": 5070.0
+     }
+    ],
+    "targets": [
+     {
+      "type": "neuron",
+      "id": "CMP-11"
+     },
+     {
+      "type": "neuron",
+      "id": "CMP-12"
+     },
+     {
+      "type": "neuron",
+      "id": "CMP-13"
+     },
+     {
+      "type": "neuron",
+      "id": "CMP-14"
+     },
+     {
+      "type": "neuron",
+      "id": "CMP-16"
+     }
+    ],
+    "notes": [],
+    "related": [],
+    "type": "budget_cut"
+   },
+   "expected_profit_delta": 18355.85,
+   "confidence": 0.45,
+   "risk": "high",
+   "requires_approval": true,
+   "blocked": false,
+   "priority": 13260.13,
+   "evidence": [
+    "curve"
+   ],
+   "anomaly_id": null,
+   "status": "pending",
+   "expected_profit_delta_fmt": "₹18.4k",
+   "calibration_factor": 1.022,
+   "targets": [
+    {
+     "type": "neuron",
+     "id": "CMP-11"
+    },
+    {
+     "type": "neuron",
+     "id": "CMP-12"
+    },
+    {
+     "type": "neuron",
+     "id": "CMP-13"
+    },
+    {
+     "type": "neuron",
+     "id": "CMP-14"
+    },
+    {
+     "type": "neuron",
+     "id": "CMP-16"
+    }
+   ]
+  },
+  {
+   "id": "REC-99342d",
+   "title": "Rebalance Google while auction prices are high",
+   "issue": "CPC spike · Google: clicks +56% more expensive",
+   "cause": "CPC spike · Google: daily profit fell by ₹25.7k. Largest driver: Auction cost (CPM/CPC) (95% of the movement, ₹26.7k/day). Clicks got 56% more expensive across 4 Google campaigns; hardest hit: Google · Running Pro · interest. Likely cause: Competitor sale drives Google auction prices up (EV-3).",
+   "action": {
+    "changes": [
+     {
+      "campaign_id": "CMP-02",
+      "name": "Google · Summer Sneakers · interest",
+      "channel": "google",
+      "from_budget": 25337.92,
+      "to_budget": 12670.0
+     },
+     {
+      "campaign_id": "CMP-06",
+      "name": "Google · Trail Max · interest",
+      "channel": "google",
+      "from_budget": 8051.5,
+      "to_budget": 8540.0
+     },
+     {
+      "campaign_id": "CMP-15",
+      "name": "Google · Sock Pack · interest",
+      "channel": "google",
+      "from_budget": 6114.24,
+      "to_budget": 3060.0
+     }
+    ],
+    "targets": [
+     {
+      "type": "neuron",
+      "id": "CMP-02"
+     },
+     {
+      "type": "neuron",
+      "id": "CMP-06"
+     },
+     {
+      "type": "neuron",
+      "id": "CMP-15"
+     },
+     {
+      "type": "cluster",
+      "id": "google"
+     }
+    ],
+    "notes": [
+     "Rebalance toward campaigns whose next rupee still returns more than a rupee while auctions are expensive",
+     "Also addresses the knock-on profit drops: AN-002"
+    ],
+    "related": [
+     "metric_shift:CMP-02"
+    ],
+    "type": "bid_cap"
+   },
+   "expected_profit_delta": 13531.26,
+   "confidence": 0.7031,
+   "risk": "medium",
+   "requires_approval": true,
+   "blocked": false,
+   "priority": 9513.43,
+   "evidence": [
+    "waterfall",
+    "curve"
+   ],
+   "anomaly_id": "AN-004",
+   "status": "pending",
+   "expected_profit_delta_fmt": "₹13.5k",
+   "calibration_factor": 1.022,
+   "targets": [
+    {
+     "type": "neuron",
+     "id": "CMP-02"
+    },
+    {
+     "type": "neuron",
+     "id": "CMP-06"
+    },
+    {
+     "type": "neuron",
+     "id": "CMP-15"
+    },
+    {
+     "type": "cluster",
+     "id": "google"
+    }
+   ]
+  },
+  {
+   "id": "REC-b9d939",
+   "title": "Launch test · Trail Max on Google (retargeting)",
+   "issue": "No campaign has ever run Trail Max · Google · retargeting; the model predicts POAS 5.5 (49 days of cover)",
+   "cause": "Scored before any spend from product rating, channel and audience effects (hold-out R² 0.20: a ranking signal, not a forecast)",
+   "action": {
+    "changes": [],
+    "targets": [
+     {
+      "type": "neuron",
+      "id": "SKU-C"
+     },
+     {
+      "type": "ghost",
+      "id": "Trail Max · Google · retargeting"
+     }
+    ],
+    "notes": [
+     "A small test budget; scale only if the measured POAS confirms the prediction"
+    ],
+    "related": [],
+    "type": "launch_test",
+    "launch": {
+     "sku_id": "SKU-C",
+     "channel": "google",
+     "audience": "retargeting",
+     "daily_budget": 5000.0,
+     "predicted_poas": 5.5474,
+     "predicted_conv_per_1k": 2.4666
+    }
+   },
+   "expected_profit_delta": 13642.24,
+   "confidence": 0.45,
+   "risk": "low",
+   "requires_approval": false,
+   "blocked": false,
+   "priority": 6139.01,
+   "evidence": [
+    "opportunity"
+   ],
+   "anomaly_id": null,
+   "status": "pending",
+   "expected_profit_delta_fmt": "₹13.6k",
+   "calibration_factor": 1.022,
+   "targets": [
+    {
+     "type": "neuron",
+     "id": "SKU-C"
+    },
+    {
+     "type": "ghost",
+     "id": "Trail Max · Google · retargeting"
+    }
+   ]
+  },
+  {
+   "id": "REC-0c414b",
+   "title": "Scale under-funded high-margin campaigns",
+   "issue": "1 campaign(s) earn more than ₹1 on the next rupee (marginal POAS 1.59 to 1.59) and have stock",
+   "cause": "Their response curves still have headroom: the optimizer moves budget toward them",
+   "action": {
+    "changes": [
+     {
+      "campaign_id": "CMP-07",
+      "name": "Meta · Trail Max · lookalike",
+      "channel": "meta",
+      "from_budget": 5928.65,
+      "to_budget": 8890.0
+     }
+    ],
+    "targets": [
+     {
+      "type": "neuron",
+      "id": "CMP-07"
+     }
+    ],
+    "notes": [],
+    "related": [],
+    "type": "scale_up"
+   },
+   "expected_profit_delta": 1339.12,
+   "confidence": 0.45,
+   "risk": "high",
+   "requires_approval": true,
+   "blocked": false,
+   "priority": 5602.6,
+   "evidence": [
+    "curve"
+   ],
+   "anomaly_id": null,
+   "status": "pending",
+   "expected_profit_delta_fmt": "₹1.3k",
+   "calibration_factor": 1.022,
+   "targets": [
+    {
+     "type": "neuron",
+     "id": "CMP-07"
+    }
+   ]
+  },
+  {
+   "id": "REC-dd057a",
+   "title": "Launch test · Trail Max on TikTok (retargeting)",
+   "issue": "No campaign has ever run Trail Max · TikTok · retargeting; the model predicts POAS 4.8 (49 days of cover)",
+   "cause": "Scored before any spend from product rating, channel and audience effects (hold-out R² 0.20: a ranking signal, not a forecast)",
+   "action": {
+    "changes": [],
+    "targets": [
+     {
+      "type": "neuron",
+      "id": "SKU-C"
+     },
+     {
+      "type": "ghost",
+      "id": "Trail Max · TikTok · retargeting"
+     }
+    ],
+    "notes": [
+     "A small test budget; scale only if the measured POAS confirms the prediction"
+    ],
+    "related": [],
+    "type": "launch_test",
+    "launch": {
+     "sku_id": "SKU-C",
+     "channel": "tiktok",
+     "audience": "retargeting",
+     "daily_budget": 5000.0,
+     "predicted_poas": 4.8247,
+     "predicted_conv_per_1k": 2.1453
+    }
+   },
+   "expected_profit_delta": 11474.22,
+   "confidence": 0.45,
+   "risk": "low",
+   "requires_approval": false,
+   "blocked": false,
+   "priority": 5163.4,
+   "evidence": [
+    "opportunity"
+   ],
+   "anomaly_id": null,
+   "status": "pending",
+   "expected_profit_delta_fmt": "₹11.5k",
+   "calibration_factor": 1.022,
+   "targets": [
+    {
+     "type": "neuron",
+     "id": "SKU-C"
+    },
+    {
+     "type": "ghost",
+     "id": "Trail Max · TikTok · retargeting"
+    }
+   ]
+  },
+  {
+   "id": "REC-ae83e4",
+   "title": "Scale winner · TikTok · Gym Flex · broad",
+   "issue": "Positive spike · TikTok · Gym Flex · broad: profit +631%, a winner worth scaling",
+   "cause": "Positive spike · TikTok · Gym Flex · broad: daily profit rose by ₹13.7k. Largest driver: Click-through / creative (88% of the movement, ₹14.7k/day). A new creative (CR-10b) launched in this window and lifted click-through by 118%.",
+   "action": {
+    "changes": [
+     {
+      "campaign_id": "CMP-10",
+      "name": "TikTok · Gym Flex · broad",
+      "channel": "tiktok",
+      "from_budget": 15205.46,
+      "to_budget": 17490.0
+     }
+    ],
+    "targets": [
+     {
+      "type": "neuron",
+      "id": "CMP-10"
+     }
+    ],
+    "notes": [
+     "Scale carefully: viral traffic converts 17% worse (site CVR)"
+    ],
+    "related": [
+     "conversion_drop:SKU-J"
+    ],
+    "type": "scale_up"
+   },
+   "expected_profit_delta": 1071.98,
+   "confidence": 0.6,
+   "risk": "medium",
+   "requires_approval": true,
+   "blocked": false,
+   "priority": 643.18,
+   "evidence": [
+    "waterfall",
+    "curve",
+    "funnel"
+   ],
+   "anomaly_id": "AN-003",
+   "status": "pending",
+   "expected_profit_delta_fmt": "₹1.1k",
+   "calibration_factor": 1.022,
+   "targets": [
+    {
+     "type": "neuron",
+     "id": "CMP-10"
+    }
+   ]
+  },
+  {
+   "id": "REC-3dbeb0",
+   "title": "Optimise Meta on store-verified conversions",
+   "issue": "Attribution inflation · Meta: platform reports +22% more conversions than the store",
+   "cause": "Meta reports 22% more conversions than the store recorded. Platform ROAS 2.40 vs true 1.97 — optimising on platform numbers would over-fund this channel.",
+   "action": {
+    "changes": [],
+    "targets": [
+     {
+      "type": "source",
+      "id": "meta_ads"
+     }
+    ],
+    "notes": [
+     "server-side conversion tracking (CAPI / enhanced conversions)"
+    ],
+    "related": [],
+    "type": "data_fix",
+    "settings": {
+     "channel": "meta",
+     "conversion_source": "server_side",
+     "reason": "platform reports 22% more conversions than the store"
+    }
+   },
+   "expected_profit_delta": 0.0,
+   "confidence": 0.55,
+   "risk": "low",
+   "requires_approval": false,
+   "blocked": false,
+   "priority": 0.0,
+   "evidence": [
+    "reconciliation"
+   ],
+   "anomaly_id": "AN-008",
+   "status": "pending",
+   "expected_profit_delta_fmt": "₹0",
+   "calibration_factor": 1.022,
+   "targets": [
+    {
+     "type": "source",
+     "id": "meta_ads"
+    }
+   ]
+  },
+  {
+   "id": "REC-f697a9",
+   "title": "Optimise Google on store-verified conversions",
+   "issue": "Attribution inflation · Google: platform reports +15% more conversions than the store",
+   "cause": "Google reports 15% more conversions than the store recorded. Platform ROAS 3.18 vs true 2.77 — optimising on platform numbers would over-fund this channel.",
+   "action": {
+    "changes": [],
+    "targets": [
+     {
+      "type": "source",
+      "id": "google_ads"
+     }
+    ],
+    "notes": [
+     "server-side conversion tracking (CAPI / enhanced conversions)"
+    ],
+    "related": [],
+    "type": "data_fix",
+    "settings": {
+     "channel": "google",
+     "conversion_source": "server_side",
+     "reason": "platform reports 15% more conversions than the store"
+    }
+   },
+   "expected_profit_delta": 0.0,
+   "confidence": 0.55,
+   "risk": "low",
+   "requires_approval": false,
+   "blocked": false,
+   "priority": 0.0,
+   "evidence": [
+    "reconciliation"
+   ],
+   "anomaly_id": "AN-009",
+   "status": "pending",
+   "expected_profit_delta_fmt": "₹0",
+   "calibration_factor": 1.022,
+   "targets": [
+    {
+     "type": "source",
+     "id": "google_ads"
+    }
+   ]
+  },
+  {
+   "id": "REC-567405",
+   "title": "Protect stock · cut ads on Running Pro by 60%",
+   "issue": "Stockout risk · Running Pro: 5.0 days of cover left while ₹89.3k/day of ads still run",
+   "cause": "Stockout risk · Running Pro: daily gross margin fell by ₹24.3k. Largest driver: Traffic (sessions) (91% of the movement, ₹22.1k/day). Only 5.0 days of stock left with no inbound shipment, while ₹89.3k/day of ads still drive demand — ₹1.56L/day of margin is at risk.",
+   "action": {
+    "changes": [
+     {
+      "campaign_id": "CMP-03",
+      "name": "Meta · Running Pro · lookalike",
+      "channel": "meta",
+      "from_budget": 40034.52,
+      "to_budget": 16010.0
+     },
+     {
+      "campaign_id": "CMP-04",
+      "name": "Google · Running Pro · interest",
+      "channel": "google",
+      "from_budget": 29300.11,
+      "to_budget": 11720.0
+     },
+     {
+      "campaign_id": "CMP-05",
+      "name": "Amazon · Running Pro · retargeting",
+      "channel": "amazon",
+      "from_budget": 19941.0,
+      "to_budget": 7980.0
+     }
+    ],
+    "targets": [
+     {
+      "type": "neuron",
+      "id": "SKU-B"
+     },
+     {
+      "type": "neuron",
+      "id": "CMP-03"
+     },
+     {
+      "type": "neuron",
+      "id": "CMP-04"
+     },
+     {
+      "type": "neuron",
+      "id": "CMP-05"
+     }
+    ],
+    "notes": [
+     "Spend increases on this SKU stay blocked until stock recovers"
+    ],
+    "related": [],
+    "type": "inventory_protect"
+   },
+   "expected_profit_delta": 53565.63,
+   "confidence": 0.6735,
+   "risk": "high",
+   "requires_approval": true,
+   "blocked": false,
+   "priority": 41077.95,
+   "evidence": [
+    "stock_cover",
+    "curve"
+   ],
+   "anomaly_id": "AN-005",
+   "status": "executed",
+   "executed_at": "2026-10-07T14:55:36",
+   "approver": "user",
+   "updated_at": "2026-10-07T14:55:36",
+   "expected_profit_delta_fmt": "₹53.6k",
+   "calibration_factor": 1.022,
+   "targets": [
+    {
+     "type": "neuron",
+     "id": "SKU-B"
+    },
+    {
+     "type": "neuron",
+     "id": "CMP-03"
+    },
+    {
+     "type": "neuron",
+     "id": "CMP-04"
+    },
+    {
+     "type": "neuron",
+     "id": "CMP-05"
+    }
+   ]
+  },
+  {
+   "id": "REC-afd747",
+   "title": "Refresh creative & trim budget · Meta · Summer Sneakers · broad",
+   "issue": "Creative fatigue · Meta · Summer Sneakers · broad: frequency 1.9 → 3.7, CTR -36%",
+   "cause": "Creative fatigue · Meta · Summer Sneakers · broad: daily profit fell by ₹2.8k. Largest driver: Click-through / creative (92% of the movement, ₹2.7k/day). Frequency rose from 1.9 to 3.7 and click-through fell 36% — the audience has seen this creative too often.",
+   "action": {
+    "changes": [
+     {
+      "campaign_id": "CMP-01",
+      "name": "Meta · Summer Sneakers · broad",
+      "channel": "meta",
+      "from_budget": 50272.49,
+      "to_budget": 25140.0
+     }
+    ],
+    "targets": [
+     {
+      "type": "neuron",
+      "id": "CMP-01"
+     }
+    ],
+    "notes": [
+     "Rotate in a UGC variant while the audience recovers from the tired creative"
+    ],
+    "related": [],
+    "type": "creative_refresh",
+    "creative_refresh": {
+     "campaign_id": "CMP-01",
+     "current_creative": "CR-01a",
+     "suggested": "UGC testimonial variant"
+    }
+   },
+   "expected_profit_delta": 24152.94,
+   "confidence": 0.7419,
+   "risk": "high",
+   "requires_approval": true,
+   "blocked": false,
+   "priority": 22917.88,
+   "evidence": [
+    "ctr_trend",
+    "waterfall",
+    "curve"
+   ],
+   "anomaly_id": "AN-001",
+   "status": "rolled_back",
+   "executed_at": "2026-10-07T14:55:36",
+   "approver": "user",
+   "updated_at": "2026-10-07T14:55:36",
+   "rolled_back_at": "2026-10-07T14:55:36",
+   "expected_profit_delta_fmt": "₹24.2k",
+   "calibration_factor": 1.022,
+   "targets": [
+    {
+     "type": "neuron",
+     "id": "CMP-01"
+    }
+   ]
+  },
+  {
+   "id": "REC-2a61c9",
+   "title": "Review price & trim ads · Casual X",
+   "issue": "Conversion drop · Casual X: site conversion -18% after the price moved ₹1,999 → ₹2,299",
+   "cause": "Conversion drop · Casual X: daily gross margin rose by ₹1.5k. Largest driver: Price / unit margin (54% of the movement, ₹9.2k/day). Partly offset by Site conversion rate (₹5.9k/day). Site conversion fell 18% after the price moved from ₹1,999 to ₹2,299 (EV-2). The price rise traded customers for margin: volume lost ₹7.8k/day, margin gained ₹9.2k/day. See causal analysis for proof. Causal check (synthetic control): units ≈ −22% vs what would have happened anyway; net margin effect ₹2.1k/day (95% CI -₹3.3k to ₹62.0k over the 14 days).",
+   "action": {
+    "changes": [
+     {
+      "campaign_id": "CMP-08",
+      "name": "Meta · Casual X · broad",
+      "channel": "meta",
+      "from_budget": 25344.07,
+      "to_budget": 12680.0
+     },
+     {
+      "campaign_id": "CMP-09",
+      "name": "Amazon · Casual X · interest",
+      "channel": "amazon",
+      "from_budget": 14821.25,
+      "to_budget": 7420.0
+     }
+    ],
+    "targets": [
+     {
+      "type": "neuron",
+      "id": "SKU-D"
+     },
+     {
+      "type": "neuron",
+      "id": "CMP-08"
+     },
+     {
+      "type": "neuron",
+      "id": "CMP-09"
+     }
+    ],
+    "notes": [
+     "Causal check: units -22% vs counterfactual; the net margin effect is not statistically distinguishable from zero"
+    ],
+    "related": [],
+    "type": "price_review",
+    "price_review": {
+     "sku_id": "SKU-D",
+     "price_from": 1999.0,
+     "price_to": 2299.0,
+     "event_id": "EV-2",
+     "causal": {
+      "effect_per_day": 2096.38,
+      "ci_low": -3300.38,
+      "ci_high": 61999.1,
+      "units_change_pct": -0.2177
+     }
+    }
+   },
+   "expected_profit_delta": 14867.78,
+   "confidence": 0.7292,
+   "risk": "high",
+   "requires_approval": true,
+   "blocked": false,
+   "priority": 15840.91,
+   "evidence": [
+    "funnel",
+    "causal",
+    "waterfall"
+   ],
+   "anomaly_id": "AN-006",
+   "status": "rejected",
+   "rejected_at": "2026-10-07T14:55:36",
+   "approver": "user",
+   "reject_reason": null,
+   "updated_at": "2026-10-07T14:55:36",
+   "expected_profit_delta_fmt": "₹14.9k",
+   "calibration_factor": 1.022,
+   "targets": [
+    {
+     "type": "neuron",
+     "id": "SKU-D"
+    },
+    {
+     "type": "neuron",
+     "id": "CMP-08"
+    },
+    {
+     "type": "neuron",
+     "id": "CMP-09"
+    }
+   ]
+  }
+ ],
+ "pending": [
+  {
+   "id": "REC-51637e",
+   "title": "Trim loss-making campaigns",
+   "issue": "5 campaigns return less than ₹1 on the next rupee (marginal POAS 0.04 to 0.84)",
+   "cause": "Their response curves are past the point of diminishing returns: the optimizer cuts each toward the spend where the next rupee earns a rupee",
+   "action": {
+    "changes": [
+     {
+      "campaign_id": "CMP-11",
+      "name": "TikTok · Slide Comfort · interest",
+      "channel": "tiktok",
+      "from_budget": 10044.03,
+      "to_budget": 5030.0
+     },
+     {
+      "campaign_id": "CMP-12",
+      "name": "Programmatic · Office Loafer · broad",
+      "channel": "programmatic",
+      "from_budget": 18170.69,
+      "to_budget": 9090.0
+     },
+     {
+      "campaign_id": "CMP-13",
+      "name": "Amazon · Hiking Boot · interest",
+      "channel": "amazon",
+      "from_budget": 14759.26,
+      "to_budget": 9640.0
+     },
+     {
+      "campaign_id": "CMP-14",
+      "name": "Meta · Kids Glow · retargeting",
+      "channel": "meta",
+      "from_budget": 8133.24,
+      "to_budget": 5690.0
+     },
+     {
+      "campaign_id": "CMP-16",
+      "name": "Programmatic · Summer Sneakers · retargeting",
+      "channel": "programmatic",
+      "from_budget": 10121.78,
+      "to_budget": 5070.0
+     }
+    ],
+    "targets": [
+     {
+      "type": "neuron",
+      "id": "CMP-11"
+     },
+     {
+      "type": "neuron",
+      "id": "CMP-12"
+     },
+     {
+      "type": "neuron",
+      "id": "CMP-13"
+     },
+     {
+      "type": "neuron",
+      "id": "CMP-14"
+     },
+     {
+      "type": "neuron",
+      "id": "CMP-16"
+     }
+    ],
+    "notes": [],
+    "related": [],
+    "type": "budget_cut"
+   },
+   "expected_profit_delta": 18355.85,
+   "confidence": 0.45,
+   "risk": "high",
+   "requires_approval": true,
+   "blocked": false,
+   "priority": 13260.13,
+   "evidence": [
+    "curve"
+   ],
+   "anomaly_id": null,
+   "status": "pending",
+   "expected_profit_delta_fmt": "₹18.4k",
+   "calibration_factor": 1.022,
+   "targets": [
+    {
+     "type": "neuron",
+     "id": "CMP-11"
+    },
+    {
+     "type": "neuron",
+     "id": "CMP-12"
+    },
+    {
+     "type": "neuron",
+     "id": "CMP-13"
+    },
+    {
+     "type": "neuron",
+     "id": "CMP-14"
+    },
+    {
+     "type": "neuron",
+     "id": "CMP-16"
+    }
+   ]
+  },
+  {
+   "id": "REC-99342d",
+   "title": "Rebalance Google while auction prices are high",
+   "issue": "CPC spike · Google: clicks +56% more expensive",
+   "cause": "CPC spike · Google: daily profit fell by ₹25.7k. Largest driver: Auction cost (CPM/CPC) (95% of the movement, ₹26.7k/day). Clicks got 56% more expensive across 4 Google campaigns; hardest hit: Google · Running Pro · interest. Likely cause: Competitor sale drives Google auction prices up (EV-3).",
+   "action": {
+    "changes": [
+     {
+      "campaign_id": "CMP-02",
+      "name": "Google · Summer Sneakers · interest",
+      "channel": "google",
+      "from_budget": 25337.92,
+      "to_budget": 12670.0
+     },
+     {
+      "campaign_id": "CMP-06",
+      "name": "Google · Trail Max · interest",
+      "channel": "google",
+      "from_budget": 8051.5,
+      "to_budget": 8540.0
+     },
+     {
+      "campaign_id": "CMP-15",
+      "name": "Google · Sock Pack · interest",
+      "channel": "google",
+      "from_budget": 6114.24,
+      "to_budget": 3060.0
+     }
+    ],
+    "targets": [
+     {
+      "type": "neuron",
+      "id": "CMP-02"
+     },
+     {
+      "type": "neuron",
+      "id": "CMP-06"
+     },
+     {
+      "type": "neuron",
+      "id": "CMP-15"
+     },
+     {
+      "type": "cluster",
+      "id": "google"
+     }
+    ],
+    "notes": [
+     "Rebalance toward campaigns whose next rupee still returns more than a rupee while auctions are expensive",
+     "Also addresses the knock-on profit drops: AN-002"
+    ],
+    "related": [
+     "metric_shift:CMP-02"
+    ],
+    "type": "bid_cap"
+   },
+   "expected_profit_delta": 13531.26,
+   "confidence": 0.7031,
+   "risk": "medium",
+   "requires_approval": true,
+   "blocked": false,
+   "priority": 9513.43,
+   "evidence": [
+    "waterfall",
+    "curve"
+   ],
+   "anomaly_id": "AN-004",
+   "status": "pending",
+   "expected_profit_delta_fmt": "₹13.5k",
+   "calibration_factor": 1.022,
+   "targets": [
+    {
+     "type": "neuron",
+     "id": "CMP-02"
+    },
+    {
+     "type": "neuron",
+     "id": "CMP-06"
+    },
+    {
+     "type": "neuron",
+     "id": "CMP-15"
+    },
+    {
+     "type": "cluster",
+     "id": "google"
+    }
+   ]
+  },
+  {
+   "id": "REC-b9d939",
+   "title": "Launch test · Trail Max on Google (retargeting)",
+   "issue": "No campaign has ever run Trail Max · Google · retargeting; the model predicts POAS 5.5 (49 days of cover)",
+   "cause": "Scored before any spend from product rating, channel and audience effects (hold-out R² 0.20: a ranking signal, not a forecast)",
+   "action": {
+    "changes": [],
+    "targets": [
+     {
+      "type": "neuron",
+      "id": "SKU-C"
+     },
+     {
+      "type": "ghost",
+      "id": "Trail Max · Google · retargeting"
+     }
+    ],
+    "notes": [
+     "A small test budget; scale only if the measured POAS confirms the prediction"
+    ],
+    "related": [],
+    "type": "launch_test",
+    "launch": {
+     "sku_id": "SKU-C",
+     "channel": "google",
+     "audience": "retargeting",
+     "daily_budget": 5000.0,
+     "predicted_poas": 5.5474,
+     "predicted_conv_per_1k": 2.4666
+    }
+   },
+   "expected_profit_delta": 13642.24,
+   "confidence": 0.45,
+   "risk": "low",
+   "requires_approval": false,
+   "blocked": false,
+   "priority": 6139.01,
+   "evidence": [
+    "opportunity"
+   ],
+   "anomaly_id": null,
+   "status": "pending",
+   "expected_profit_delta_fmt": "₹13.6k",
+   "calibration_factor": 1.022,
+   "targets": [
+    {
+     "type": "neuron",
+     "id": "SKU-C"
+    },
+    {
+     "type": "ghost",
+     "id": "Trail Max · Google · retargeting"
+    }
+   ]
+  },
+  {
+   "id": "REC-0c414b",
+   "title": "Scale under-funded high-margin campaigns",
+   "issue": "1 campaign(s) earn more than ₹1 on the next rupee (marginal POAS 1.59 to 1.59) and have stock",
+   "cause": "Their response curves still have headroom: the optimizer moves budget toward them",
+   "action": {
+    "changes": [
+     {
+      "campaign_id": "CMP-07",
+      "name": "Meta · Trail Max · lookalike",
+      "channel": "meta",
+      "from_budget": 5928.65,
+      "to_budget": 8890.0
+     }
+    ],
+    "targets": [
+     {
+      "type": "neuron",
+      "id": "CMP-07"
+     }
+    ],
+    "notes": [],
+    "related": [],
+    "type": "scale_up"
+   },
+   "expected_profit_delta": 1339.12,
+   "confidence": 0.45,
+   "risk": "high",
+   "requires_approval": true,
+   "blocked": false,
+   "priority": 5602.6,
+   "evidence": [
+    "curve"
+   ],
+   "anomaly_id": null,
+   "status": "pending",
+   "expected_profit_delta_fmt": "₹1.3k",
+   "calibration_factor": 1.022,
+   "targets": [
+    {
+     "type": "neuron",
+     "id": "CMP-07"
+    }
+   ]
+  },
+  {
+   "id": "REC-dd057a",
+   "title": "Launch test · Trail Max on TikTok (retargeting)",
+   "issue": "No campaign has ever run Trail Max · TikTok · retargeting; the model predicts POAS 4.8 (49 days of cover)",
+   "cause": "Scored before any spend from product rating, channel and audience effects (hold-out R² 0.20: a ranking signal, not a forecast)",
+   "action": {
+    "changes": [],
+    "targets": [
+     {
+      "type": "neuron",
+      "id": "SKU-C"
+     },
+     {
+      "type": "ghost",
+      "id": "Trail Max · TikTok · retargeting"
+     }
+    ],
+    "notes": [
+     "A small test budget; scale only if the measured POAS confirms the prediction"
+    ],
+    "related": [],
+    "type": "launch_test",
+    "launch": {
+     "sku_id": "SKU-C",
+     "channel": "tiktok",
+     "audience": "retargeting",
+     "daily_budget": 5000.0,
+     "predicted_poas": 4.8247,
+     "predicted_conv_per_1k": 2.1453
+    }
+   },
+   "expected_profit_delta": 11474.22,
+   "confidence": 0.45,
+   "risk": "low",
+   "requires_approval": false,
+   "blocked": false,
+   "priority": 5163.4,
+   "evidence": [
+    "opportunity"
+   ],
+   "anomaly_id": null,
+   "status": "pending",
+   "expected_profit_delta_fmt": "₹11.5k",
+   "calibration_factor": 1.022,
+   "targets": [
+    {
+     "type": "neuron",
+     "id": "SKU-C"
+    },
+    {
+     "type": "ghost",
+     "id": "Trail Max · TikTok · retargeting"
+    }
+   ]
+  },
+  {
+   "id": "REC-ae83e4",
+   "title": "Scale winner · TikTok · Gym Flex · broad",
+   "issue": "Positive spike · TikTok · Gym Flex · broad: profit +631%, a winner worth scaling",
+   "cause": "Positive spike · TikTok · Gym Flex · broad: daily profit rose by ₹13.7k. Largest driver: Click-through / creative (88% of the movement, ₹14.7k/day). A new creative (CR-10b) launched in this window and lifted click-through by 118%.",
+   "action": {
+    "changes": [
+     {
+      "campaign_id": "CMP-10",
+      "name": "TikTok · Gym Flex · broad",
+      "channel": "tiktok",
+      "from_budget": 15205.46,
+      "to_budget": 17490.0
+     }
+    ],
+    "targets": [
+     {
+      "type": "neuron",
+      "id": "CMP-10"
+     }
+    ],
+    "notes": [
+     "Scale carefully: viral traffic converts 17% worse (site CVR)"
+    ],
+    "related": [
+     "conversion_drop:SKU-J"
+    ],
+    "type": "scale_up"
+   },
+   "expected_profit_delta": 1071.98,
+   "confidence": 0.6,
+   "risk": "medium",
+   "requires_approval": true,
+   "blocked": false,
+   "priority": 643.18,
+   "evidence": [
+    "waterfall",
+    "curve",
+    "funnel"
+   ],
+   "anomaly_id": "AN-003",
+   "status": "pending",
+   "expected_profit_delta_fmt": "₹1.1k",
+   "calibration_factor": 1.022,
+   "targets": [
+    {
+     "type": "neuron",
+     "id": "CMP-10"
+    }
+   ]
+  },
+  {
+   "id": "REC-3dbeb0",
+   "title": "Optimise Meta on store-verified conversions",
+   "issue": "Attribution inflation · Meta: platform reports +22% more conversions than the store",
+   "cause": "Meta reports 22% more conversions than the store recorded. Platform ROAS 2.40 vs true 1.97 — optimising on platform numbers would over-fund this channel.",
+   "action": {
+    "changes": [],
+    "targets": [
+     {
+      "type": "source",
+      "id": "meta_ads"
+     }
+    ],
+    "notes": [
+     "server-side conversion tracking (CAPI / enhanced conversions)"
+    ],
+    "related": [],
+    "type": "data_fix",
+    "settings": {
+     "channel": "meta",
+     "conversion_source": "server_side",
+     "reason": "platform reports 22% more conversions than the store"
+    }
+   },
+   "expected_profit_delta": 0.0,
+   "confidence": 0.55,
+   "risk": "low",
+   "requires_approval": false,
+   "blocked": false,
+   "priority": 0.0,
+   "evidence": [
+    "reconciliation"
+   ],
+   "anomaly_id": "AN-008",
+   "status": "pending",
+   "expected_profit_delta_fmt": "₹0",
+   "calibration_factor": 1.022,
+   "targets": [
+    {
+     "type": "source",
+     "id": "meta_ads"
+    }
+   ]
+  },
+  {
+   "id": "REC-f697a9",
+   "title": "Optimise Google on store-verified conversions",
+   "issue": "Attribution inflation · Google: platform reports +15% more conversions than the store",
+   "cause": "Google reports 15% more conversions than the store recorded. Platform ROAS 3.18 vs true 2.77 — optimising on platform numbers would over-fund this channel.",
+   "action": {
+    "changes": [],
+    "targets": [
+     {
+      "type": "source",
+      "id": "google_ads"
+     }
+    ],
+    "notes": [
+     "server-side conversion tracking (CAPI / enhanced conversions)"
+    ],
+    "related": [],
+    "type": "data_fix",
+    "settings": {
+     "channel": "google",
+     "conversion_source": "server_side",
+     "reason": "platform reports 15% more conversions than the store"
+    }
+   },
+   "expected_profit_delta": 0.0,
+   "confidence": 0.55,
+   "risk": "low",
+   "requires_approval": false,
+   "blocked": false,
+   "priority": 0.0,
+   "evidence": [
+    "reconciliation"
+   ],
+   "anomaly_id": "AN-009",
+   "status": "pending",
+   "expected_profit_delta_fmt": "₹0",
+   "calibration_factor": 1.022,
+   "targets": [
+    {
+     "type": "source",
+     "id": "google_ads"
+    }
+   ]
+  }
+ ],
+ "history": [
+  {
+   "id": "REC-567405",
+   "title": "Protect stock · cut ads on Running Pro by 60%",
+   "issue": "Stockout risk · Running Pro: 5.0 days of cover left while ₹89.3k/day of ads still run",
+   "cause": "Stockout risk · Running Pro: daily gross margin fell by ₹24.3k. Largest driver: Traffic (sessions) (91% of the movement, ₹22.1k/day). Only 5.0 days of stock left with no inbound shipment, while ₹89.3k/day of ads still drive demand — ₹1.56L/day of margin is at risk.",
+   "action": {
+    "changes": [
+     {
+      "campaign_id": "CMP-03",
+      "name": "Meta · Running Pro · lookalike",
+      "channel": "meta",
+      "from_budget": 40034.52,
+      "to_budget": 16010.0
+     },
+     {
+      "campaign_id": "CMP-04",
+      "name": "Google · Running Pro · interest",
+      "channel": "google",
+      "from_budget": 29300.11,
+      "to_budget": 11720.0
+     },
+     {
+      "campaign_id": "CMP-05",
+      "name": "Amazon · Running Pro · retargeting",
+      "channel": "amazon",
+      "from_budget": 19941.0,
+      "to_budget": 7980.0
+     }
+    ],
+    "targets": [
+     {
+      "type": "neuron",
+      "id": "SKU-B"
+     },
+     {
+      "type": "neuron",
+      "id": "CMP-03"
+     },
+     {
+      "type": "neuron",
+      "id": "CMP-04"
+     },
+     {
+      "type": "neuron",
+      "id": "CMP-05"
+     }
+    ],
+    "notes": [
+     "Spend increases on this SKU stay blocked until stock recovers"
+    ],
+    "related": [],
+    "type": "inventory_protect"
+   },
+   "expected_profit_delta": 53565.63,
+   "confidence": 0.6735,
+   "risk": "high",
+   "requires_approval": true,
+   "blocked": false,
+   "priority": 41077.95,
+   "evidence": [
+    "stock_cover",
+    "curve"
+   ],
+   "anomaly_id": "AN-005",
+   "status": "executed",
+   "executed_at": "2026-10-07T14:55:36",
+   "approver": "user",
+   "updated_at": "2026-10-07T14:55:36",
+   "expected_profit_delta_fmt": "₹53.6k",
+   "calibration_factor": 1.022,
+   "targets": [
+    {
+     "type": "neuron",
+     "id": "SKU-B"
+    },
+    {
+     "type": "neuron",
+     "id": "CMP-03"
+    },
+    {
+     "type": "neuron",
+     "id": "CMP-04"
+    },
+    {
+     "type": "neuron",
+     "id": "CMP-05"
+    }
+   ]
+  },
+  {
+   "id": "REC-afd747",
+   "title": "Refresh creative & trim budget · Meta · Summer Sneakers · broad",
+   "issue": "Creative fatigue · Meta · Summer Sneakers · broad: frequency 1.9 → 3.7, CTR -36%",
+   "cause": "Creative fatigue · Meta · Summer Sneakers · broad: daily profit fell by ₹2.8k. Largest driver: Click-through / creative (92% of the movement, ₹2.7k/day). Frequency rose from 1.9 to 3.7 and click-through fell 36% — the audience has seen this creative too often.",
+   "action": {
+    "changes": [
+     {
+      "campaign_id": "CMP-01",
+      "name": "Meta · Summer Sneakers · broad",
+      "channel": "meta",
+      "from_budget": 50272.49,
+      "to_budget": 25140.0
+     }
+    ],
+    "targets": [
+     {
+      "type": "neuron",
+      "id": "CMP-01"
+     }
+    ],
+    "notes": [
+     "Rotate in a UGC variant while the audience recovers from the tired creative"
+    ],
+    "related": [],
+    "type": "creative_refresh",
+    "creative_refresh": {
+     "campaign_id": "CMP-01",
+     "current_creative": "CR-01a",
+     "suggested": "UGC testimonial variant"
+    }
+   },
+   "expected_profit_delta": 24152.94,
+   "confidence": 0.7419,
+   "risk": "high",
+   "requires_approval": true,
+   "blocked": false,
+   "priority": 22917.88,
+   "evidence": [
+    "ctr_trend",
+    "waterfall",
+    "curve"
+   ],
+   "anomaly_id": "AN-001",
+   "status": "rolled_back",
+   "executed_at": "2026-10-07T14:55:36",
+   "approver": "user",
+   "updated_at": "2026-10-07T14:55:36",
+   "rolled_back_at": "2026-10-07T14:55:36",
+   "expected_profit_delta_fmt": "₹24.2k",
+   "calibration_factor": 1.022,
+   "targets": [
+    {
+     "type": "neuron",
+     "id": "CMP-01"
+    }
+   ]
+  },
+  {
+   "id": "REC-2a61c9",
+   "title": "Review price & trim ads · Casual X",
+   "issue": "Conversion drop · Casual X: site conversion -18% after the price moved ₹1,999 → ₹2,299",
+   "cause": "Conversion drop · Casual X: daily gross margin rose by ₹1.5k. Largest driver: Price / unit margin (54% of the movement, ₹9.2k/day). Partly offset by Site conversion rate (₹5.9k/day). Site conversion fell 18% after the price moved from ₹1,999 to ₹2,299 (EV-2). The price rise traded customers for margin: volume lost ₹7.8k/day, margin gained ₹9.2k/day. See causal analysis for proof. Causal check (synthetic control): units ≈ −22% vs what would have happened anyway; net margin effect ₹2.1k/day (95% CI -₹3.3k to ₹62.0k over the 14 days).",
+   "action": {
+    "changes": [
+     {
+      "campaign_id": "CMP-08",
+      "name": "Meta · Casual X · broad",
+      "channel": "meta",
+      "from_budget": 25344.07,
+      "to_budget": 12680.0
+     },
+     {
+      "campaign_id": "CMP-09",
+      "name": "Amazon · Casual X · interest",
+      "channel": "amazon",
+      "from_budget": 14821.25,
+      "to_budget": 7420.0
+     }
+    ],
+    "targets": [
+     {
+      "type": "neuron",
+      "id": "SKU-D"
+     },
+     {
+      "type": "neuron",
+      "id": "CMP-08"
+     },
+     {
+      "type": "neuron",
+      "id": "CMP-09"
+     }
+    ],
+    "notes": [
+     "Causal check: units -22% vs counterfactual; the net margin effect is not statistically distinguishable from zero"
+    ],
+    "related": [],
+    "type": "price_review",
+    "price_review": {
+     "sku_id": "SKU-D",
+     "price_from": 1999.0,
+     "price_to": 2299.0,
+     "event_id": "EV-2",
+     "causal": {
+      "effect_per_day": 2096.38,
+      "ci_low": -3300.38,
+      "ci_high": 61999.1,
+      "units_change_pct": -0.2177
+     }
+    }
+   },
+   "expected_profit_delta": 14867.78,
+   "confidence": 0.7292,
+   "risk": "high",
+   "requires_approval": true,
+   "blocked": false,
+   "priority": 15840.91,
+   "evidence": [
+    "funnel",
+    "causal",
+    "waterfall"
+   ],
+   "anomaly_id": "AN-006",
+   "status": "rejected",
+   "rejected_at": "2026-10-07T14:55:36",
+   "approver": "user",
+   "reject_reason": null,
+   "updated_at": "2026-10-07T14:55:36",
+   "expected_profit_delta_fmt": "₹14.9k",
+   "calibration_factor": 1.022,
+   "targets": [
+    {
+     "type": "neuron",
+     "id": "SKU-D"
+    },
+    {
+     "type": "neuron",
+     "id": "CMP-08"
+    },
+    {
+     "type": "neuron",
+     "id": "CMP-09"
+    }
+   ]
+  }
+ ],
+ "calibration_factor": 1.022
+}

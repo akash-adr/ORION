@@ -1,0 +1,94 @@
+{
+ "ok": true,
+ "api_calls": [
+  {
+   "platform": "meta",
+   "endpoint": "/meta/campaigns/CMP-01/budget",
+   "method": "POST",
+   "daily_budget": 25140.0,
+   "status": "OK",
+   "ts": "2026-10-07T14:55:36"
+  },
+  {
+   "platform": "meta",
+   "endpoint": "/meta/campaigns/CMP-01/creatives",
+   "method": "POST",
+   "campaign_id": "CMP-01",
+   "suggested": "UGC testimonial variant",
+   "status": "QUEUED",
+   "ts": "2026-10-07T14:55:36"
+  }
+ ],
+ "decision": {
+  "id": "REC-afd747",
+  "title": "Refresh creative & trim budget · Meta · Summer Sneakers · broad",
+  "issue": "Creative fatigue · Meta · Summer Sneakers · broad: frequency 1.9 → 3.7, CTR -36%",
+  "cause": "Creative fatigue · Meta · Summer Sneakers · broad: daily profit fell by ₹2.8k. Largest driver: Click-through / creative (92% of the movement, ₹2.7k/day). Frequency rose from 1.9 to 3.7 and click-through fell 36% — the audience has seen this creative too often.",
+  "action": {
+   "changes": [
+    {
+     "campaign_id": "CMP-01",
+     "name": "Meta · Summer Sneakers · broad",
+     "channel": "meta",
+     "from_budget": 50272.49,
+     "to_budget": 25140.0
+    }
+   ],
+   "targets": [
+    {
+     "type": "neuron",
+     "id": "CMP-01"
+    }
+   ],
+   "notes": [
+    "Rotate in a UGC variant while the audience recovers from the tired creative"
+   ],
+   "related": [],
+   "type": "creative_refresh",
+   "creative_refresh": {
+    "campaign_id": "CMP-01",
+    "current_creative": "CR-01a",
+    "suggested": "UGC testimonial variant"
+   }
+  },
+  "expected_profit_delta": 24152.94,
+  "confidence": 0.7419,
+  "risk": "high",
+  "requires_approval": true,
+  "blocked": false,
+  "priority": 22917.88,
+  "evidence": [
+   "ctr_trend",
+   "waterfall",
+   "curve"
+  ],
+  "anomaly_id": "AN-001",
+  "status": "executed",
+  "executed_at": "2026-10-07T14:55:36",
+  "approver": "user",
+  "updated_at": "2026-10-07T14:55:36"
+ },
+ "outcome": {
+  "decision_id": "REC-afd747",
+  "title": "Refresh creative & trim budget · Meta · Summer Sneakers · broad",
+  "date": "2026-10-07",
+  "predicted": 24152.94,
+  "simulated": true,
+  "seeded": false,
+  "action_type": "creative_refresh",
+  "campaigns": [
+   "CMP-01"
+  ],
+  "synapses": [
+   "CMP-01->SKU-A"
+  ],
+  "synapse_deltas": {
+   "CMP-01->SKU-A": 0.25
+  },
+  "measured_at": "2026-10-07T14:55:36",
+  "actual": 22092.1,
+  "error_pct": -0.0853,
+  "measurable": true,
+  "note": "simulated outcome (fixed seed)"
+ }
+}

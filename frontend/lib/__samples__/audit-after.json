@@ -1,0 +1,129 @@
+[
+ {
+  "ts": "2026-10-07T14:55:36",
+  "decision_id": "REC-567405",
+  "title": "Protect stock · cut ads on Running Pro by 60%",
+  "action": "execute",
+  "approver": "user",
+  "api_calls": [
+   {
+    "platform": "meta",
+    "endpoint": "/meta/campaigns/CMP-03/budget",
+    "method": "POST",
+    "daily_budget": 16010.0,
+    "status": "OK",
+    "ts": "2026-10-07T14:55:36"
+   },
+   {
+    "platform": "google",
+    "endpoint": "/google/campaigns/CMP-04/budget",
+    "method": "POST",
+    "daily_budget": 11720.0,
+    "status": "OK",
+    "ts": "2026-10-07T14:55:36"
+   },
+   {
+    "platform": "amazon",
+    "endpoint": "/amazon/campaigns/CMP-05/budget",
+    "method": "POST",
+    "daily_budget": 7980.0,
+    "status": "OK",
+    "ts": "2026-10-07T14:55:36"
+   }
+  ],
+  "rollback": [
+   {
+    "type": "budget",
+    "campaign_id": "CMP-03",
+    "channel": "meta",
+    "budget": 40034.52
+   },
+   {
+    "type": "budget",
+    "campaign_id": "CMP-04",
+    "channel": "google",
+    "budget": 29300.11
+   },
+   {
+    "type": "budget",
+    "campaign_id": "CMP-05",
+    "channel": "amazon",
+    "budget": 19941.0
+   }
+  ],
+  "expected_profit_delta": 53565.63,
+  "confidence": 0.6735
+ },
+ {
+  "ts": "2026-10-07T14:55:36",
+  "decision_id": "REC-afd747",
+  "title": "Refresh creative & trim budget · Meta · Summer Sneakers · broad",
+  "action": "rollback",
+  "approver": "user",
+  "api_calls": [
+   {
+    "platform": "meta",
+    "endpoint": "/meta/campaigns/CMP-01/budget",
+    "method": "POST",
+    "daily_budget": 50272.49,
+    "status": "OK",
+    "ts": "2026-10-07T14:55:36"
+   }
+  ],
+  "restored": [
+   {
+    "campaign_id": "CMP-01",
+    "budget": 50272.49
+   }
+  ],
+  "expected_profit_delta": 24152.94,
+  "confidence": 0.7419
+ },
+ {
+  "ts": "2026-10-07T14:55:36",
+  "decision_id": "REC-2a61c9",
+  "title": "Review price & trim ads · Casual X",
+  "action": "reject",
+  "approver": "user",
+  "api_calls": [],
+  "reason": null,
+  "expected_profit_delta": 14867.78,
+  "confidence": 0.7292
+ },
+ {
+  "ts": "2026-10-07T14:55:36",
+  "decision_id": "REC-afd747",
+  "title": "Refresh creative & trim budget · Meta · Summer Sneakers · broad",
+  "action": "execute",
+  "approver": "user",
+  "api_calls": [
+   {
+    "platform": "meta",
+    "endpoint": "/meta/campaigns/CMP-01/budget",
+    "method": "POST",
+    "daily_budget": 25140.0,
+    "status": "OK",
+    "ts": "2026-10-07T14:55:36"
+   },
+   {
+    "platform": "meta",
+    "endpoint": "/meta/campaigns/CMP-01/creatives",
+    "method": "POST",
+    "campaign_id": "CMP-01",
+    "suggested": "UGC testimonial variant",
+    "status": "QUEUED",
+    "ts": "2026-10-07T14:55:36"
+   }
+  ],
+  "rollback": [
+   {
+    "type": "budget",
+    "campaign_id": "CMP-01",
+    "channel": "meta",
+    "budget": 50272.49
+   }
+  ],
+  "expected_profit_delta": 24152.94,
+  "confidence": 0.7419
+ }
+]

@@ -1,0 +1,13 @@
+{
+ "ok": true,
+ "api_calls": [
+  {
+   "platform": "meta",
+   "endpoint": "/meta/campaigns/CMP-01/budget",
+   "method": "POST",
+   "daily_budget": 50272.49,
+   "status": "OK",
+   "ts": "2026-10-07T14:55:36"
+  }
+ ]
+}

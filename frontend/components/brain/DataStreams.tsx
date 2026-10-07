@@ -66,7 +66,7 @@ function Node({ label, index, positions }: { label: string; index: number; posit
       <Html center zIndexRange={[5, 0]} style={{ pointerEvents: "none" }} position={[0, 0.13, 0]}>
         <div
           ref={labelRef}
-          className="whitespace-nowrap rounded-full border border-blue-400/30 bg-blue-500/10 px-2.5 py-0.5 font-mono text-[10px] tracking-wide text-blue-200 backdrop-blur-sm transition-opacity duration-500"
+          className="whitespace-nowrap rounded-full border border-blue-400/30 bg-blue-500/10 px-2.5 py-0.5 text-xs text-blue-200 backdrop-blur-sm transition-opacity duration-500"
         >
           {label}
         </div>

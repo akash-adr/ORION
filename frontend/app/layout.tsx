@@ -1,34 +1,23 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { Geist_Mono, Manrope, Newsreader } from "next/font/google";
+import Providers from "@/components/providers";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"], display: "swap" });
+const newsreader = Newsreader({ variable: "--font-newsreader", subsets: ["latin"], display: "swap" });
+// Monospace appears only inside the API-call log.
+const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
-  title: "D2C Ad Intelligence Engine",
-  description: "Next-Generation Autonomous D2C Advertising Intelligence & Decision Engine",
+  title: "Profit Pilot",
+  description: "The decision engine behind your ad spend.",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`dark ${geistSans.variable} ${geistMono.variable}`}>
-      <body
-        className={`font-sans min-h-screen bg-background text-foreground antialiased`}
-      >
-        <TooltipProvider>{children}</TooltipProvider>
+    <html lang="en" data-theme="dark" className={`dark ${manrope.variable} ${newsreader.variable} ${geistMono.variable}`} suppressHydrationWarning>
+      <body className="min-h-screen bg-ink font-sans text-bone antialiased">
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
