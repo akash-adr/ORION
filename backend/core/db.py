@@ -57,6 +57,17 @@ TABLE_COLUMNS: dict[str, list[str]] = {
     ],
     "dim_creative": ["creative_id", "campaign_id", "format", "hook", "ugc", "launch_date"],
     "events": ["event_id", "date", "type", "entity", "description"],
+    # --- added for M2 (additive): Neural Brain integration and data quality ---
+    "neuron_metrics": [  # one row per brain neuron (26)
+        "entity_id", "entity_type", "label", "cluster", "channel", "sku_id", "spend_7d", "spend_prev_7d",
+        "poas_7d", "profit_7d", "change_pct", "roas_platform_7d", "roas_true_7d", "trust_score", "days_cover",
+        "health", "size",
+    ],
+    "source_status": [  # one row per brain_manifest source (9)
+        "source_id", "label", "kind", "connector", "file", "rows", "min_date", "max_date", "last_synced",
+        "status", "trust_score", "inflation_pct", "detail",
+    ],
+    "data_quality": ["check", "status", "affected_rows", "detail", "action"],  # one row per check
 }
 
 # Raw files written by M1 into config.RAW_DIR

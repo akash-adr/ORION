@@ -11,6 +11,7 @@ revenue; windows are anchored on the last date in the data, never the wall clock
 """
 from __future__ import annotations
 
+import argparse
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -20,11 +21,14 @@ import pandas as pd
 from backend.core import metrics as m
 from backend.core.config import CHANNELS, RECENT_DAYS
 from backend.core.db import TABLE_COLUMNS, validate_table, write_table
+from backend.ingest import brain
 from backend.ingest import connectors as c
+from backend.ingest import quality as q
 
 LONG_WINDOW_DAYS = 28  # "28d" feature window
 TABLES = ("fact_daily", "sku_daily", "reconciliation", "feature_store", "dim_sku", "dim_campaign",
-          "dim_creative", "events")
+          "dim_creative", "events")  # the 8 core tables
+BRAIN_TABLES = ("neuron_metrics", "source_status", "data_quality")  # added with the brain integration
 
 
 # ---------------------------------------------------------------------------
@@ -41,9 +45,17 @@ def fetch_all() -> dict[str, pd.DataFrame]:
 # ---------------------------------------------------------------------------
 # Step 2–3: fact_daily
 # ---------------------------------------------------------------------------
-def build_fact_daily(frames: dict[str, pd.DataFrame]) -> pd.DataFrame:
-    """Campaign × day fact table with true store orders, daily price and every derived metric."""
-    ads = pd.concat([frames[conn.source] for conn in c.AD_CONNECTORS], ignore_index=True)
+def concat_ads(frames: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """All 5 ad connectors stacked into one frame."""
+    return pd.concat([frames[conn.source] for conn in c.AD_CONNECTORS], ignore_index=True)
+
+
+def build_fact_daily(frames: dict[str, pd.DataFrame], ads: pd.DataFrame | None = None) -> pd.DataFrame:
+    """Campaign × day fact table with true store orders, daily price and every derived metric.
+
+    `ads` is the cleaned ad frame from the quality checks; defaults to the raw concatenation.
+    """
+    ads = concat_ads(frames) if ads is None else ads
     utm = frames["shopify_utm"][["date", "campaign_id", "orders"]]
     # LEFT join: an inner join would drop zero-order days and bias CVR upward.
     f = ads.merge(utm, on=["date", "campaign_id"], how="left")
@@ -163,7 +175,7 @@ def summarise(tables: dict[str, pd.DataFrame], frames: dict[str, pd.DataFrame], 
     return {
         "as_of": as_of,
         "rows": {name: int(len(df)) for name, df in tables.items()},
-        "sources": {name: int(len(df)) for name, df in frames.items()},
+        "connector_rows": {name: int(len(df)) for name, df in frames.items()},
         "reconciliation": rec.to_dict(orient="records"),
         "data_trust": data_trust,
         "blended_poas_7d": m.poas(w7["gross_margin"].sum(), spend7),
@@ -178,25 +190,66 @@ def now_ist() -> str:
     return datetime.now(ZoneInfo(c.TIMEZONE)).strftime("%Y-%m-%dT%H:%M:%S")
 
 
-def run_pipeline(as_of: str | None = None, verbose: bool = True) -> dict:
-    """Run steps 1–7, validate and write all 8 tables (replacing any existing), return a summary."""
+def run_pipeline(as_of: str | None = None, verbose: bool = True, emit_brain_events: bool = True) -> dict:
+    """Run the full M2 pipeline and return a summary.
+
+    1. fetch + normalise every source        4. reconcile, SKU/funnel, feature vectors, dims
+    2. quality checks 1–4 clean the inputs   5. neuron_metrics + source_status for the Neural Brain
+    3. build fact_daily                      6. quality checks 5–9, validate + write all 11 tables
+    7. (emit_brain_events) log 10 "ingest" brain events: 9 data streams + 1 settle pulse
+    Re-runs replace every table (idempotent).
+    """
     start = time.perf_counter()
     as_of = as_of or now_ist()
     frames = fetch_all()
-    fact = build_fact_daily(frames)
+    manifest = brain.load_manifest()
+
+    # Checks 1–4: clean inputs before building facts.
+    ads, q_complete = q.check_completeness(concat_ads(frames), frames["campaigns"])
+    clean, ads, q_dupes = q.check_duplicates(frames, ads)
+    clean, ads, q_neg = q.check_negatives(clean, ads)
+    unmapped, q_unmapped = q.check_unmapped_campaigns(clean["campaigns"], clean["sku_master"])
+
+    fact = build_fact_daily(clean, ads)
     tables = {
         "fact_daily": fact,
-        "sku_daily": build_sku_daily(frames),
+        "sku_daily": build_sku_daily(clean),
         "reconciliation": build_reconciliation(fact, as_of),
-        "feature_store": build_feature_store(fact, frames["campaigns"]),
-        **build_dims(frames),
+        "feature_store": build_feature_store(fact, clean["campaigns"]),
+        **build_dims(clean),
     }
     assert tuple(tables) == TABLES
+
+    # Checks 5–7, then brain tables, then checks 8–9.
+    quality_rows = [
+        q_complete, q_dupes, q_neg, q_unmapped,
+        q.check_reconciliation_gap(tables["reconciliation"]),
+        q.check_freshness(fact, manifest["date_range"]["end"]),
+        q.check_orders_consistency(fact, tables["sku_daily"], unmapped),
+    ]
+    tables["neuron_metrics"] = brain.build_neuron_metrics(fact, tables["sku_daily"], tables["reconciliation"],
+                                                          manifest, unmapped)
+    tables["source_status"] = brain.build_source_status(frames, tables["reconciliation"], quality_rows, manifest, as_of)
+    quality_rows.append(q.check_infinite_values(tables))
+    quality_rows.append(q.check_manifest_alignment(manifest, tables["neuron_metrics"], tables["source_status"]))
+    tables["data_quality"] = q.public(quality_rows)
+
     for name, df in tables.items():
         validate_table(df, name)
-        write_table(df, name)  # if_exists="replace": re-runs are idempotent
+        write_table(df[TABLE_COLUMNS[name]], name)  # if_exists="replace": re-runs are idempotent
     duration_ms = (time.perf_counter() - start) * 1000
+
     summary = summarise(tables, frames, as_of, duration_ms)
+    summary["neurons"] = tables["neuron_metrics"]["health"].value_counts().reindex(["good", "weak", "losing"],
+                                                                                 fill_value=0).to_dict()
+    summary["sources"] = dict(zip(tables["source_status"]["source_id"], tables["source_status"]["status"]))
+    summary["quality"] = tables["data_quality"]["status"].value_counts().reindex(["pass", "warn", "fail"],
+                                                                               fill_value=0).to_dict()
+    events = []
+    if emit_brain_events:
+        events = brain.emit_ingest_events(tables["source_status"], summary["data_trust"], summary["rows"], duration_ms)
+    summary["brain_events_logged"] = len(events)
+    summary["brain_event_ids"] = [e.id for e in events]
     if verbose:
         print_summary(summary)
     return summary
@@ -214,10 +267,19 @@ def print_summary(s: dict) -> None:
     print()
     print(f"Last {RECENT_DAYS} days: blended POAS {s['blended_poas_7d']:.2f} · "
           f"true ROAS {s['roas_true_7d']:.2f} vs platform ROAS {s['roas_platform_7d']:.2f}")
+    print()
+    n, qc = s.get("neurons", {}), s.get("quality", {})
+    print(f"Brain: neurons good {n.get('good', 0)} · weak {n.get('weak', 0)} · losing {n.get('losing', 0)} | "
+          f"quality pass {qc.get('pass', 0)} · warn {qc.get('warn', 0)} · fail {qc.get('fail', 0)} | "
+          f"brain events logged {s.get('brain_events_logged', 0)}")
 
 
-def main() -> None:
-    run_pipeline()
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description="M2 ingestion & reconciliation pipeline")
+    parser.add_argument("--no-brain-events", action="store_true", help="do not log ingest brain events")
+    parser.add_argument("--as-of", help='fixed run timestamp "YYYY-MM-DDTHH:MM:SS" (default: now, IST)')
+    args = parser.parse_args(argv)
+    run_pipeline(as_of=args.as_of, emit_brain_events=not args.no_brain_events)
 
 
 if __name__ == "__main__":

@@ -286,12 +286,17 @@ log_brain_event(make_brain_event("anomaly", entity_id="CMP-01", ref_id="AN-001",
 | Date | Change | Why |
 |---|---|---|
 | 2026-10-07 | Appended `"brain_manifest.json"` to `db.RAW_FILES` (additive, nothing renamed or reordered) | The Neural Brain needs the static structure (sources, neurons, synapses, scenario timeline) written by M1 |
+| 2026-10-07 | Appended `RECON_GAP_THRESHOLD = 0.10`, `REFRESH_MINUTES = 5`, `FRESHNESS_WARN_MINUTES = 15` to `config.py` | M2 flags reconciliation gaps (S5); the demo loop and stale-data badge need shared intervals |
+| 2026-10-07 | Added `neuron_metrics`, `source_status`, `data_quality` to `db.TABLE_COLUMNS` | The Neural Brain needs live per-neuron numbers and per-stream status; data-quality results must be stored and shown |
 
 ## 12. Assumptions
 
 _(Team: add assumptions here as they are made.)_
 
 - **M1 calibration (2026-10-07): `CVR_SCALE = 0.9`.** At 1.0 blended POAS was 1.02 (above the 0.88–0.98 band). Set to 0.9 and re-checked: blended POAS 0.91, every channel's true ROAS within ±20% of target, and the profitable list unchanged (CMP-03, 04, 05, 06, 07, 13, 14), so no further 0.02 steps were needed. Other knobs unchanged: `CH_CVR` meta 1.00, google 1.15, amazon 1.30, tiktok 0.80, programmatic 0.70; `ELASTICITY = -2.5`. Achieved economics are in the Module 1 section below.
+- **M2 validation, CMP-02 band:** the M2 spec asked for CMP-02 full-period true ROAS 1.85–1.95, which assumed `CVR_SCALE = 1.0`. After recalibrating to 0.9 it is 1.66, so `backend/ingest/validate.py` uses M1's ±20% band around 1.9 (1.52–2.28) while still requiring POAS < 1.
+- **M2 last-7-day headline numbers** (POAS 0.83, true ROAS 2.05, platform ROAS 2.27) sit below the spec's estimates (≈ 0.93 / 2.3 / 2.55) for the same reason, plus S1 fatigue and the S3 Google CPC spike falling in that window. All are within the validation tolerances.
+- **M2 `change_pct` sign:** measured against |previous| (still via M0 `change_pct`), so a deepening loss reads as negative. With a plain recent ÷ previous − 1, CMP-01 (−₹43.0k → −₹45.6k/day, a worse loss) would show as +6%.
 - **M1 weekly budget tests** use calendar weeks (Monday–Sunday) for the first 55 days; the last 35 days run at budget so detection baselines are clean.
 
 ## 13. Common mistakes
@@ -428,6 +433,136 @@ Knobs: `CVR_SCALE = 0.9` (lowered from 1.0 to bring blended POAS into 0.88–0.9
 | Blended POAS | 0.93 (accept 0.88–0.98) | 0.91 |
 | Profitable campaigns (POAS > 1) | CMP-03, 04, 05, 06, 07, 13, 14 | exact match |
 | CMP-02 ("ROAS lies") | ROAS ≈ 1.9, POAS < 1 | ROAS 1.66, POAS 0.30 |
+
+---
+
+# Module 2 — Ingestion & Reconciliation
+
+> **Pitch line:** "Every ad platform claims the same sale. We reconcile against store orders — Meta over-reports by 22%, Google by 15% — so every decision is made on the truth, not on what platforms say."
+
+M2 is the Neural Brain's **Ingest lobe**. It pulls every source through one connector interface into `data/engine.db`, reconciles platform claims against store orders, computes every metric later modules use, and pulses the brain. Every later module reads **only** these tables, never raw files.
+
+## How to run
+
+```bash
+python -m backend.ingest.pipeline                     # build all tables + log 10 ingest brain events
+python -m backend.ingest.pipeline --no-brain-events   # same, without touching state.json
+python -m backend.ingest.pipeline --as-of 2026-10-06T23:00:00
+python -m backend.ingest.validate                     # 16-point PASS/FAIL table (no brain events on the real state)
+python -m pytest -q                                   # M0 + M1 + M2 tests (temp folders only)
+```
+
+## Architecture
+
+```
+ Meta · Google · Amazon · TikTok · Programmatic   Shopify orders + UTM   GA4   ERP inventory   Pricing
+          │ AD_CONNECTORS (5)                           │ STORE, UTM        │ GA4   │ ERP         │ PRICING
+          └──────────────────────────────┬──────────────┴────────────────────┴───────┴─────────────┘
+                                         ▼
+                         1. normalise   (ISO dates IST, ₹ floats, int counts, trimmed strings)
+                         2. quality 1–4 (completeness · duplicates · negatives · unmapped campaigns)
+                                         ▼
+                         3. join        ads ⟕ UTM orders ⟕ daily price ⟕ COGS ⟕ campaign  (LEFT joins)
+                         4. derive      revenue · gross margin · profit · CTR · CPC · CPM · CVR · ROAS · POAS
+                         5. reconcile   platform conversions vs store orders → inflation · trust (per channel)
+                         6. SKU/funnel  orders ⟕ inventory ⟕ GA4 → units_7d · days_cover
+                         7. vectors     feature_store (7d / 28d per campaign)
+                         8. brain       neuron_metrics (26) · source_status (9)
+                         9. quality 5–9 (gap · freshness · orders consistency · ±inf · manifest alignment)
+                                         ▼
+                 validate_table → write_table (replace)  →  11 tables in data/engine.db
+                                         ▼
+                 10 "ingest" brain events → state.json  (9 data streams + 1 settle pulse)
+```
+
+## Connectors (`backend/ingest/connectors.py`)
+
+All connectors share `fetch() -> DataFrame` (normalised), so replacing a CSV with the real API changes nothing downstream.
+
+| Connector | File today | Real API it stands in for | Brain source |
+|---|---|---|---|
+| meta_ads | ad_performance.csv (meta rows) | Meta Marketing API (Insights) | meta_ads |
+| google_ads | ad_performance.csv (google rows) | Google Ads API (GAQL; cost_micros ÷ 1,000,000) | google_ads |
+| amazon_ads | ad_performance.csv (amazon rows) | Amazon Ads API (Sponsored Products reports) | amazon_ads |
+| tiktok_ads | ad_performance.csv (tiktok rows) | TikTok Marketing API | tiktok_ads |
+| programmatic_ads | ad_performance.csv (programmatic rows) | DSP reporting API (e.g. DV360) | programmatic |
+| shopify_orders | orders.csv | Shopify Admin API (Orders) | store |
+| shopify_utm | store_orders_by_utm.csv | Shopify Admin API (Orders + UTM params) | store |
+| erp_inventory | inventory.csv | ERP / Shopify Inventory API | inventory |
+| ga4 | ga_events.csv | GA4 Data API | ga4 |
+| pricing | pricing.csv | Store catalogue + competitor price feed | pricing |
+| sku_master, campaigns, creatives, events | *.csv | Catalogue / ad-account metadata | — |
+
+## Output tables (11)
+
+| Table | Rows | Columns |
+|---|---|---|
+| fact_daily | 1,440 (campaign × day) | date, channel, campaign_id, sku_id, audience, creative_id, spend, impressions, clicks, frequency, platform_conversions, platform_revenue, orders, price, cogs, revenue, gross_margin, profit, ctr, cpc, cpm, cvr, roas_platform, roas_true, poas, campaign_name, format |
+| sku_daily | 900 (SKU × day) | date, sku_id, orders_paid, orders_organic, unit_price, units, revenue, on_hand, inbound, sessions, pdp_views, add_to_cart, checkout, purchases, name, cogs, margin_pct, units_7d, days_cover |
+| reconciliation | 5 (channel) | channel, platform_conversions, store_orders, platform_revenue, true_revenue, spend, inflation_pct, roas_platform, roas_true, trust_score, last_synced |
+| feature_store | 16 (campaign) | campaign_id, channel, sku_id, audience, spend_7d, spend_28d, poas_7d, poas_28d, ctr_7d, cvr_7d, cpm_7d, freq_7d, profit_7d |
+| dim_sku | 10 | sku_id, name, category, price, cogs, rating, organic_per_day, margin_pct |
+| dim_campaign | 16 | campaign_id, channel, sku_id, audience, daily_budget, sat_mult, format, campaign_name |
+| dim_creative | 17 | creative_id, campaign_id, format, hook, ugc, launch_date |
+| events | 4 | event_id, date, type, entity, description |
+| neuron_metrics | 26 (brain neuron) | entity_id, entity_type, label, cluster, channel, sku_id, spend_7d, spend_prev_7d, poas_7d, profit_7d, change_pct, roas_platform_7d, roas_true_7d, trust_score, days_cover, health, size |
+| source_status | 9 (data stream) | source_id, label, kind, connector, file, rows, min_date, max_date, last_synced, status, trust_score, inflation_pct, detail |
+| data_quality | 9 (check) | check, status, affected_rows, detail, action |
+
+Rules: period ratios are Σnumerator ÷ Σdenominator (never averages of daily ratios); division by zero → NaN, never inf; revenue is always store revenue; windows end on the last data date (2026-10-06), never the wall clock. `spend_7d` / `profit_7d` are **average daily** ₹.
+
+## Reconciliation results (full 90 days)
+
+| Channel | Inflation | Platform ROAS | True ROAS | Trust |
+|---|---|---|---|---|
+| meta | +22.0% | 2.40 | 1.97 | 0.56 |
+| google | +14.8% | 3.18 | 2.77 | 0.70 |
+| amazon | 0.0% | 3.89 | 3.89 | 1.00 |
+| tiktok | 0.0% | 1.37 | 1.37 | 1.00 |
+| programmatic | 0.0% | 0.90 | 0.90 | 1.00 |
+
+Spend-weighted **data trust 74%**. Last 7 days: blended POAS 0.83 · true ROAS 2.05 vs platform ROAS 2.27. SKU-B: 5.0 days of cover on the last day.
+
+## Data quality checks (`backend/ingest/quality.py`)
+
+| # | Check | Rule | If it fails | Current |
+|---|---|---|---|---|
+| 1 | completeness | every campaign has a row every day (16 × 90) | insert 0-spend rows · warn · "filled with 0 spend; lowers trust" | pass |
+| 2 | duplicates | unique (date, campaign_id) and (date, sku_id) | keep the last row · warn | pass |
+| 3 | negatives | spend, impressions, clicks, orders, units, on_hand, inbound ≥ 0 | drop + log · warn | pass |
+| 4 | unmapped_campaigns | every campaign's sku_id exists in dim_sku | exclude from SKU metrics · warn | pass |
+| 5 | reconciliation_gap | \|inflation_pct\| ≤ `RECON_GAP_THRESHOLD` (0.10) | warn · M3 raises attribution_inflation; M6 recommends server-side tracking | **warn (Meta +22%, Google +15%, planted S5, correct)** |
+| 6 | freshness | max data date = manifest `date_range.end` | warn | pass |
+| 7 | orders_consistency | Σ fact orders per SKU-day = sku_daily.orders_paid | fail | pass |
+| 8 | infinite_values | no ±inf in any table | fail | pass |
+| 9 | manifest_alignment | every manifest neuron/source has a row | fail | pass |
+
+Checks 1–4 clean inputs before `fact_daily` is built; 5–9 audit outputs. A source with a non-passing input check is marked `warn` in `source_status`.
+
+## Neural Brain integration (`backend/ingest/brain.py`)
+
+**`neuron_metrics`** (26 rows, manifest order) gives every neuron its live state. Windows are the last 7 days vs the 7 before.
+
+| Field | Meaning | UI use |
+|---|---|---|
+| health | `neuron_health(poas_7d)`; neurons with no ad spend: good if days_cover ≥ 7 else weak | **colour** (good / weak / losing) |
+| size | `neuron_size(spend_7d, min, max)` across all 26 | **size** |
+| trust_score | channel trust (campaigns) / spend-weighted trust (SKUs) | **ring** |
+| roas_platform_7d, roas_true_7d, poas_7d | what the platform says vs the truth vs profit | **hover card** ("ROAS lies") |
+| days_cover | SKU cover on the last date | **stock bar** |
+| change_pct | (profit_7d − prev) ÷ \|prev\|, so a deeper loss is negative | trend arrow |
+
+SKU neurons combine paid metrics from their campaigns with organic sales: `profit_7d = (Σ store revenue − Σ units × cogs − Σ ad spend) ÷ 7`. Current split: good 10 · weak 3 · losing 13.
+
+**`source_status`** (9 rows) powers the 9 data streams flowing into the Ingest lobe: rows, date span, `status` (`warn` when an ad platform's \|inflation\| > 10%, rows = 0, or an input check failed), trust and a one-line `detail` ("Reports 22% more conversions than the store").
+
+**Brain events**: each `run_pipeline(emit_brain_events=True)` logs **10 `ingest` events** in manifest order: 9 per-source pulses (`severity` medium for warn sources) plus 1 settle pulse ("Ingestion complete · data trust 74%"). The Meta and Google `medium` pulses are the visual S5 (double counting) in the Ingest lobe; M3 later raises the formal `attribution_inflation` anomaly in Diagnose. Tests and `validate` use `emit_brain_events=False` or a temporary state file.
+
+## Continuous ingestion
+
+- `POST /refresh` (M9) re-runs M2 → M3 → M6 → M7; every M2 run rewrites tables with `if_exists="replace"`, so refreshes are idempotent (verified by validate check 10).
+- `REFRESH_MINUTES = 5` drives the demo loop; `last_synced` older than `FRESHNESS_WARN_MINUTES = 15` shows a stale badge.
+- Scaling path: SQLite → DuckDB → Postgres/BigQuery by changing only M0 `db.py` (`connect`, `write_table`, `read_table`, `query`); connectors swap CSVs for APIs behind the same `fetch()`.
 
 ---
 

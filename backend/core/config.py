@@ -166,3 +166,10 @@ def validate_config() -> None:
     assert DEFAULT_AUTONOMY in AUTONOMY_MODES, "DEFAULT_AUTONOMY must be one of AUTONOMY_MODES"
     assert DEFAULT_OBJECTIVE in OBJECTIVES, "DEFAULT_OBJECTIVE must be one of OBJECTIVES"
     assert NEURON_POAS_WEAK < NEURON_POAS_GOOD, "NEURON_POAS_WEAK must be below NEURON_POAS_GOOD"
+
+# ---------------------------------------------------------------------------
+# 2.9 Ingestion (added for M2, additive)
+# ---------------------------------------------------------------------------
+RECON_GAP_THRESHOLD = 0.10  # |inflation_pct| above 10% = reconciliation gap; M3 raises attribution_inflation, M6 recommends server-side tracking
+REFRESH_MINUTES = 5  # auto-refresh interval for the demo loop
+FRESHNESS_WARN_MINUTES = 15  # last_synced older than this → stale warning badge
