@@ -497,10 +497,13 @@ def build_brain_manifest(
     hero_story = {"steps": [
         {"step": 1, "scenario": "S1", "focus": "CMP-01", "beat": "Summer Sneakers neuron turns red — creative fatigue"},
         {"step": 2, "scenario": "S1", "focus": "CMP-01", "beat": "Pulse to Diagnose: frequency up, CTR down"},
-        {"step": 3, "scenario": "S4", "focus": "CMP-06", "beat": "Decide: move budget toward under-funded Trail Max"},
+        # CMP-07 (Trail Max on Meta) is the campaign the optimizer actually scales; CMP-06 sits at marginal POAS ≈ 1 ("hold")
+        {"step": 3, "scenario": "S4", "focus": "CMP-07", "beat": "Decide: move budget toward under-funded Trail Max"},
         {"step": 4, "scenario": "S2", "focus": "SKU-B", "beat": "Running Pro locked — stock guardrail blocks increases"},
-        {"step": 5, "scenario": "S4", "focus": "CMP-06",
-         "beat": "Approve → synapse CMP-06 → SKU-C brightens; Learning tracks predicted vs actual"},
+        {"step": 5, "scenario": "S8", "focus": f"ghost: Trail Max · {CHANNEL_DISPLAY['google']} · retargeting",
+         "beat": "Ghost neuron: predicted POAS 5.5 before spending a rupee → launch a ₹5k/day test"},
+        {"step": 6, "scenario": "S4", "focus": "CMP-07",
+         "beat": "Approve → synapse CMP-07 → SKU-C brightens; Learning tracks predicted vs actual"},
     ]}
 
     manifest = {

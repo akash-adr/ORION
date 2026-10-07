@@ -429,7 +429,7 @@ Static structure only; live numbers (spend, POAS, health, size) come from M9's `
 | `stimuli` | EV-1 sale (gain, all SKUs), EV-2 price raise (loss), EV-3 competitor (loss), EV-4 UGC launch (gain) |
 | `scenario_timeline` | S1–S8 as expected brain pulses (table above), with detector module and headline |
 | `replay_order` | scenario ids for `/brain/replay` |
-| `hero_story` | the 5-step, 30-second demo path (S1 → S1 → S4 → S2 → S4) |
+| `hero_story` | the 6-step, 30-second demo path (S1 → S1 → S4 on CMP-07 → S2 → S8 ghost neuron → S4 approve on CMP-07) |
 
 ## Achieved economics (calibration)
 
