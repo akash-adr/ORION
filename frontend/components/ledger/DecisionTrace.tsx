@@ -7,7 +7,7 @@ import CampaignName from "@/components/CampaignName";
 import { BOUND_LABEL, boundReasons, changePct, guardrailChecks, outcomeFor, rawImpact } from "@/lib/decision";
 import { inr, inrDay, num, pct, ratio } from "@/lib/format";
 import { actionTypeDisplay, anomalyEntity, channelDisplay, kindDisplay, zMeaning } from "@/lib/names";
-import { useAnomalies, useCampaigns, useCurves, useDiagnosis, useLearning, useMetaConfig, useOptimizeKey } from "@/lib/queries";
+import { useAnomalies, useCampaigns, useCurves, useDiagnosis, useLearning, useMetaConfig } from "@/lib/queries";
 import type { Anomaly, Decision } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -70,10 +70,8 @@ function PlanStep({ d }: { d: Decision }) {
   const cfg = useMetaConfig().data;
   const campaigns = useCampaigns().data ?? [];
   const curves = useCurves().data ?? [];
-  const opt = useOptimizeKey().data;
   const a = d.action as Record<string, unknown> & Decision["action"];
   const byId = new Map(campaigns.map((c) => [c.campaign_id, c]));
-  const reasons = new Map((opt?.campaigns ?? []).map((c) => [c.campaign_id, c.bound_reasons]));
   const launch = a.launch as { sku_id: string; channel: string; audience: string; daily_budget: number; predicted_poas: number; predicted_conv_per_1k: number } | undefined;
   const creative = a.creative_refresh as { current_creative: string; suggested: string } | undefined;
   const price = a.price_review as { price_from: number; price_to: number; causal: { effect_per_day: number; ci_low: number; ci_high: number; units_change_pct: number } } | undefined;
@@ -114,8 +112,7 @@ function PlanStep({ d }: { d: Decision }) {
                           </Chip>
                         ))}
                         {!chips.length && <span className="text-fog">Within limits</span>}
-                        {(reasons.get(c.campaign_id) ?? []).length > 0 && !chips.length && <span className="text-fog">{(reasons.get(c.campaign_id) ?? []).join(", ")}</span>}
-                      </span>
+                                              </span>
                     </td>
                   </tr>
                 );
@@ -129,7 +126,7 @@ function PlanStep({ d }: { d: Decision }) {
           <div><dt className="text-fog">Product</dt><dd className="font-semibold">{byId.size ? [...byId.values()].find((c) => c.sku_id === launch.sku_id)?.campaign_name.split("·")[1]?.trim() ?? launch.sku_id : launch.sku_id}</dd></div>
           <div><dt className="text-fog">Channel and audience</dt><dd className="font-semibold">{channelDisplay(launch.channel)}, {launch.audience}</dd></div>
           <div><dt className="text-fog">Test budget</dt><dd className="font-semibold">{inrDay(launch.daily_budget)}</dd></div>
-          <div><dt className="text-fog">Predicted profit on spend</dt><dd className="font-semibold">{ratio(launch.predicted_poas)}, {num(launch.predicted_conv_per_1k, 1)} orders per 1,000 clicks</dd></div>
+          <div><dt className="text-fog">Predicted profit on spend</dt><dd className="font-semibold">{ratio(launch.predicted_poas)}, {num(launch.predicted_conv_per_1k, 1)} orders per ₹1,000 of ad spend</dd></div>
         </dl>
       )}
       {creative && (

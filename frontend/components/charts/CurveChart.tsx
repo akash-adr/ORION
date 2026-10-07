@@ -12,6 +12,8 @@ interface Props {
   current?: number | null;
   planned?: number | null;
   optimal?: number | null;
+  /** spend beyond which extra rupees stop earning (dashed marker) */
+  saturation?: number | null;
   height?: number;
   summary: string;
 }
@@ -33,7 +35,7 @@ function profitAt(points: CurvePointLite[], spend: number): number {
 }
 
 /** Profit (₹/day) against daily spend for one campaign, with the current, planned and optimal spend marked and the zero line drawn. */
-export default function CurveChart({ points, current, planned, optimal, height = 260, summary }: Props) {
+export default function CurveChart({ points, current, planned, optimal, saturation, height = 260, summary }: Props) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const iw = Math.max(0, width - M.l - M.r);
   const ih = height - M.t - M.b;
@@ -89,6 +91,14 @@ export default function CurveChart({ points, current, planned, optimal, height =
                 Break-even
               </text>
             </>
+          )}
+          {saturation != null && saturation >= xt[0] && saturation <= xt[xt.length - 1] && (
+            <g>
+              <line x1={sx(saturation)} x2={sx(saturation)} y1={M.t} y2={M.t + ih} stroke="var(--risk)" strokeDasharray="4 4" />
+              <text x={sx(saturation) - 4} y={M.t + 12} textAnchor="end" fontSize="12" fill="var(--risk-fg)">
+                Saturation
+              </text>
+            </g>
           )}
           <path d={path} fill="none" stroke="var(--synapse)" strokeWidth="2.5" strokeLinejoin="round" />
           {marks.map((m) => {

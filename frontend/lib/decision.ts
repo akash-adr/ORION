@@ -83,3 +83,6 @@ export const STATUS_LABEL: Record<string, string> = {
   rejected: "Rejected",
   rolled_back: "Rolled back",
 };
+
+/** Reason ids the optimizer returns in `bound_reasons`, in plain words. */
+export const OPTIMIZER_REASON: Record<string, string> = { change_cap: "Daily change cap", stock_guard: "Stock guard", overstock_boost: "Overstock boost" };

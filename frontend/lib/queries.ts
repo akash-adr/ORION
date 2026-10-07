@@ -130,8 +130,10 @@ export const useReject = () => useDecisionMutation(api.reject);
 export const useRollback = () => useDecisionMutation(api.rollback);
 
 /** The optimizer's plan for the current objective (used for each campaign's bound reasons). */
-export const useOptimizeKey = () => {
-  const { data: settings } = useSettings();
-  const objective = settings?.objective;
-  return useQuery({ queryKey: ["optimize", objective ?? ""], queryFn: () => api.optimize({ objective }), enabled: !!objective, staleTime: 60 * SECOND });
-};
+/** An optimizer plan for any objective (a preview; it does not change the engine's objective). */
+export const useOptimize = (objective: Objective | undefined) =>
+  useQuery({ queryKey: ["optimize", objective ?? ""], queryFn: () => api.optimize({ objective }), enabled: !!objective, staleTime: 60 * SECOND });
+export const useOptimizeKey = () => useOptimize(useSettings().data?.objective);
+
+/** What-if by channel: sliders as multipliers (1 = no change). */
+export const simulateChannels = (m: Record<string, number>) => api.simulateChannels(m);
