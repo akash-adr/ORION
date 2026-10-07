@@ -231,15 +231,20 @@ def check_data_fix():
     return res["ok"] and fixed and removed, "data_fixes[google] recorded on approval and removed on rollback"
 
 
+def _last(event_type: str) -> dict:
+    """The newest brain event of a type (M7's outcome pulse follows an approval, so "the last event" is not reliable)."""
+    return [x for x in read_brain_events(limit=500) if x["type"] == event_type][-1]
+
+
 def check_brain_events():
     with temp_state():
         n = len(e.refresh_decisions()["pending"])
-        recs = read_brain_events(limit=500)
-        ok = len(recs) == n and all(x["type"] == "recommendation" and x["path"] == ["diagnose", "decide"] for x in recs)
+        recs = [x for x in read_brain_events(limit=500) if x["type"] == "recommendation"]
+        ok = len(recs) == n and all(x["path"] == ["diagnose", "decide"] for x in recs)
         again = e.refresh_decisions()["events_logged"]
         stock = by_type(load_state()["decisions"], "inventory_protect")
         e.approve(stock["id"])
-        ap = read_brain_events(limit=500)[-1]
+        ap = _last("approval")
         ok &= ap["type"] == "approval" and ap["path"] == ["decide", "learn"] and len(ap["payload"]["synapses"]) == 3
         e.set_autonomy("autonomous")
         e.auto_apply()
@@ -248,10 +253,10 @@ def check_brain_events():
         e.set_autonomy("supervised")
         cr = by_type(load_state()["decisions"], "creative_refresh")
         e.reject(cr["id"])
-        rej = read_brain_events(limit=500)[-1]
+        rej = _last("rejection")
         ok &= rej["type"] == "rejection" and rej["path"] == ["decide"]
         e.rollback(stock["id"])
-        rb = read_brain_events(limit=500)[-1]
+        rb = _last("rollback")
         ok &= rb["type"] == "rollback" and rb["path"] == ["learn", "decide"] and len(rb["payload"]["restored"]) == 3
     return bool(ok) and again == 0, f"{n} recommendation pulses (re-refresh: {again}), then approval / auto_apply / rejection / rollback pulses"
 

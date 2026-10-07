@@ -651,10 +651,6 @@ def execute(rec_id: str, approver: str = "user", emit_brain_events: bool = True)
              "confidence": d["confidence"]}
     state["audit"].append(entry)
     _finish_state_change(state)
-    try:
-        hooks.on_executed(d, entry)  # M7 will implement; a hook failure never breaks execution
-    except Exception:  # noqa: BLE001
-        pass
     if emit_brain_events:
         auto = approver == "autopilot"
         _emit("auto_apply" if auto else "approval", d,
@@ -662,6 +658,11 @@ def execute(rec_id: str, approver: str = "user", emit_brain_events: bool = True)
               {"rec_id": d["id"], "approver": approver, "targets": d["action"]["targets"], "changes": changes,
                "api_calls_count": len(calls), "synapses": _synapses(changes), "launched_test": launched,
                "data_fix": ({"channel": d["action"]["settings"]["channel"], **fixed} if fixed else None)})
+    try:  # M7 measures the outcome AFTER the approval pulse (decide → learn); a hook failure never breaks execution
+        with hooks.emitting(emit_brain_events):
+            hooks.on_executed(d, entry)
+    except Exception:  # noqa: BLE001
+        pass
     return {"ok": True, "api_calls": calls, "decision": to_dict(d)}
 
 
@@ -723,13 +724,14 @@ def rollback(rec_id: str, approver: str = "user", emit_brain_events: bool = True
             "confidence": d["confidence"]}
     state["audit"].append(back)
     _finish_state_change(state)
-    try:
-        hooks.on_rolled_back(d, back)
-    except Exception:  # noqa: BLE001
-        pass
     if emit_brain_events:
         _emit("rollback", d, f"Rolled back · {d['title']}", {"rec_id": rec_id, "approver": approver, "restored": restored,
                                                             "api_calls_count": len(calls), "targets": d["action"]["targets"]})
+    try:
+        with hooks.emitting(emit_brain_events):
+            hooks.on_rolled_back(d, back)
+    except Exception:  # noqa: BLE001
+        pass
     return {"ok": True, "api_calls": calls}
 
 

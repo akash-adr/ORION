@@ -284,8 +284,17 @@ def test_hook_exception_does_not_break_execute(state, monkeypatch):
     assert e.rollback(d["id"], emit_brain_events=False)["ok"]  # the rollback hook failing is harmless too
 
 
-def test_default_hooks_are_noops():
-    assert hooks.on_executed({}, {}) is None and hooks.on_rolled_back({}, {}) is None
+def test_hooks_are_wired_to_the_learning_loop(monkeypatch):
+    """M7 implements the hooks: executing records outcomes, rolling back removes one, and the emit flag travels along."""
+    from backend.learning import loop
+    seen = []
+    monkeypatch.setattr(loop, "record_outcomes", lambda emit_brain_events=True: seen.append(("record", emit_brain_events)))
+    monkeypatch.setattr(loop, "remove_outcome", lambda decision_id: seen.append(("remove", decision_id)))
+    hooks.on_executed({}, {})
+    with hooks.emitting(False):
+        hooks.on_executed({}, {})
+    hooks.on_rolled_back({"id": "REC-1"}, {})
+    assert seen == [("record", True), ("record", False), ("remove", "REC-1")]
 
 
 def test_refusals(state):
@@ -430,18 +439,22 @@ def test_recommendation_event_message_and_payload(state):
     assert launch["severity"] == "low" and launch["entity_id"] == "SKU-C"
 
 
+def _last(event_type):
+    return [x for x in read_brain_events(limit=500) if x["type"] == event_type][-1]
+
+
 def test_approval_event_payload_and_launch_data_fix(state):
     out = e.refresh_decisions()
     e.approve(pending(out, "inventory_protect")["id"])
-    ap = read_brain_events(limit=500)[-1]
+    ap = _last("approval")
     assert ap["type"] == "approval" and ap["path"] == ["decide", "learn"] and ap["payload"]["approver"] == "user"
     assert ap["payload"]["api_calls_count"] == 3 and len(ap["payload"]["changes"]) == 3
     assert {(s["source"], s["target"]) for s in ap["payload"]["synapses"]} == {("CMP-03", "SKU-B"), ("CMP-04", "SKU-B"), ("CMP-05", "SKU-B")}
     e.approve(pending(out, "launch_test")["id"])
-    ln = read_brain_events(limit=500)[-1]
+    ln = _last("approval")
     assert ln["payload"]["launched_test"]["test_campaign_id"].startswith("TST-") and ln["payload"]["synapses"] == []
     e.approve(pending(out, "data_fix", "Meta")["id"])
-    fx = read_brain_events(limit=500)[-1]
+    fx = _last("approval")
     assert fx["payload"]["data_fix"]["channel"] == "meta" and fx["payload"]["data_fix"]["conversion_source"] == "server_side"
 
 
@@ -454,11 +467,11 @@ def test_autopilot_reject_rollback_events(state):
     st = load_state()
     cr = next(d for d in st["decisions"] if d["action"]["type"] == "creative_refresh")
     e.reject(cr["id"], reason="later")
-    rej = read_brain_events(limit=500)[-1]
+    rej = _last("rejection")
     assert rej["type"] == "rejection" and rej["path"] == ["decide"] and rej["payload"]["reason"] == "later"
     fix = next(d for d in st["decisions"] if d["action"]["type"] == "data_fix")
     e.rollback(fix["id"])
-    rb = read_brain_events(limit=500)[-1]
+    rb = _last("rollback")
     assert rb["type"] == "rollback" and rb["path"] == ["learn", "decide"] and rb["payload"]["api_calls_count"] == 1
 
 

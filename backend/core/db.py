@@ -226,6 +226,7 @@ def default_state() -> dict:
         "launched_tests": [],  # {rec_id, test_campaign_id, sku_id, channel, audience, daily_budget, launched_at, status}
         "data_fixes": {},  # channel → {"conversion_source": "server_side", "applied_at", "rec_id"}
         "last_build_at": None,  # when the recommendation inbox was last rebuilt
+        "synapse_strength": {},  # "CMP-07->SKU-C" → learned strength (the brain's visible memory)
     }
 
 

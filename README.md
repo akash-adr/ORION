@@ -289,6 +289,7 @@ log_brain_event(make_brain_event("anomaly", entity_id="CMP-01", ref_id="AN-001",
 | 2026-10-07 | Appended `RECON_GAP_THRESHOLD = 0.10`, `REFRESH_MINUTES = 5`, `FRESHNESS_WARN_MINUTES = 15` to `config.py` | M2 flags reconciliation gaps (S5); the demo loop and stale-data badge need shared intervals |
 | 2026-10-07 | Added `neuron_metrics`, `source_status`, `data_quality` to `db.TABLE_COLUMNS` | The Neural Brain needs live per-neuron numbers and per-stream status; data-quality results must be stored and shown |
 | 2026-10-07 | Appended `FATIGUE_FREQ_UP`, `FATIGUE_CTR_DOWN`, `CPC_SPIKE_MIN`, `SKU_RECENT_DAYS`, `SKU_BASELINE_DAYS`, `PROFIT_BASE_FLOOR`, `MAD_SCALE` to `config.py` | M3 detectors need shared, documented thresholds (fatigue, CPC spike, 14/28-day site-conversion windows, robust-z scaling) so no module hard-codes them |
+| 2026-10-07 | Appended `MEASURE_WINDOW_DAYS`, `OUTCOME_BIAS_MEAN`, `OUTCOME_NOISE_SD`, `CALIBRATION_WINDOW`, `ROLLING_WINDOW`, `CALIBRATION_MIN`, `CALIBRATION_MAX`, `SEED_HISTORY_N`, `SEED_PRED_MIN`, `SEED_PRED_MAX`, `SEED_ERR_SD0`, `SEED_ERR_DECAY`, `SEED_BIAS0`, `SEED_BIAS_DECAY`, `SYNAPSE_BASE`, `SYNAPSE_GAIN`, `SYNAPSE_DECAY`, `SYNAPSE_MIN`, `SYNAPSE_MAX`, `SYNAPSE_GOOD_ERROR` to `config.py`; added `synapse_strength` to `default_state()` (old state files gain it via `load_state`) | M7 closes the loop: it measures outcomes, calibrates forecasts and strengthens or weakens the brain's synapses; none of these knobs may be hard-coded |
 | 2026-10-07 | Added `rec_signatures`, `launched_tests`, `data_fixes`, `last_build_at` to `default_state()` (old state files gain them via `load_state`) | M6's executor records launched test campaigns and applied data fixes (so rollback can undo them) and deduplicates recommendation pulses by signature |
 | 2026-10-07 | Appended `CONF_BASE`, `CONF_Z_WEIGHT`, `CONF_Z_CAP`, `CONF_UNC_WEIGHT`, `CONF_MAPE_WEIGHT`, `RISK_MEDIUM_SHIFT`, `URGENCY_BONUS`, `STOCKOUT_HORIZON_DAYS`, `STOCKOUT_AD_CUT`, `POSITIVE_SCALE_UP`, `PLAN_SCALE_THRESHOLD`, `PLAN_CUT_THRESHOLD`, `OPP_LAUNCH_N`, `OPP_IMPACT_HAIRCUT` to `config.py` | M6 turns alerts, causes, budget plans and opportunities into ranked decisions; confidence, risk, urgency and every action size must come from shared, documented knobs |
 | 2026-10-07 | Appended `OPP_TEST_BUDGET`, `OPP_TOP_N`, `OPP_GHOST_N`, `RIDGE_ALPHA`, `CV_FOLDS`, `STOCK_FACTOR_PIVOT`, `STOCK_FACTOR_MIN`, `STOCK_FACTOR_MAX`, `HEADROOM_SCALE_POAS`, `HEADROOM_CUT_POAS` to `config.py`; added `curves`, `budget_plans`, `plan_summaries`, `opportunities`, `model_metrics` to `db.TABLE_COLUMNS` | M5b scores untested combinations before any spend and M5 persists curves, plans and model honesty metrics in brain-ready form for M6 / M9 / M10 |
@@ -310,6 +311,8 @@ _(Team: add assumptions here as they are made.)_
 - **M5 stock guard vs the ±50% cap:** the M0 rule "campaigns on SKUs under 7 days of cover are capped at 40% of current spend" forces Running Pro's three campaigns to −60%, past `DAILY_CHANGE_CAP`. The guard is the deliberate exception; the validator allows it and still requires every other campaign within ±50%.
 - **M5 revenue_target:** with Running Pro forced down, revenue *falls* (−₹72.9k/day) rather than rising; the objective holds profit (+₹82) and minimises the revenue loss. The profit floor carries a small rounding buffer.
 - **M5b R² holdout** is 0.20 (spec expected ≈ 0.16): folds range from −0.14 to 0.69, so it is a ranking signal only. Reported, not tuned.
+- **M7 outcomes are simulated** (fixed seed, always labelled `simulated: true`); the 12-outcome seeded history gives rolling MAPE 27.6% → 5.9% (the spec expected ≈ 26% → 5–10%) and a calibration factor of 1.014.
+- **M7 / M6 coupling:** M6's executor now sets an emit flag around the learning hooks and runs them *after* the approval pulse (so events read approve → learn). M6 tests that read "the last event" now look events up by type.
 - **M1 weekly budget tests** use calendar weeks (Monday–Sunday) for the first 55 days; the last 35 days run at budget so detection baselines are clean.
 
 ## 13. Common mistakes
@@ -1081,6 +1084,92 @@ Same call shapes as the real APIs, so swapping in real clients changes only this
 | `rollback` | learn → decide | rollback | rec id, **restored budgets**, API-call count |
 
 The UI: recommendation pulses travel anomaly neuron → Diagnose → Decide and add an inbox card; **approval pulses** (Decide → Learn) resize the neurons to their new budgets (from `budget_overrides`) and flash the listed synapses; `auto_apply` shows the ⚡ marker; a launched test turns its **ghost neuron into a solid TEST neuron**; `data_fixes` put a "store-verified" badge on the data stream; rollback pulses reverse all of it. `emit_brain_events=False` (and every test) logs nothing. M7 (learning) is not built: executions call `hooks.on_executed` / `hooks.on_rolled_back`, no-ops that M7 will implement, and a hook failure can never break an execution.
+
+---
+
+# Module 7 — Closed-Loop Learning
+
+> **Pitch line:** "Every decision is a prediction we hold ourselves to. We measure what actually happened, and the engine recalibrates — our rolling forecast error fell from about 28% to about 6%, so its confidence is earned, not claimed."
+
+M7 is the Neural Brain's **Learn lobe**, the core of the closed loop. After every executed decision it records what happened, compares it with the prediction, and feeds the error back so the next predictions (and the confidence attached to them) are better calibrated.
+
+```
+ predict ──► execute ──► measure ──► compare ──► calibrate ──┐
+   ▲        (M6)         (M7)        error %      factor,    │
+   │                                              MAPE,      │
+   └────────── M6 scales ₹ and confidence ◄───────win-rate ──┘
+               M5 plans from the new budgets      synapses strengthen / weaken
+```
+
+```bash
+python -m backend.learning.runner              # seed the history if needed, record outcomes, print the report
+python -m backend.learning.runner --no-brain-events
+python -m backend.learning.validate            # 12-point PASS/FAIL table (temporary state only)
+python -m pytest -q                            # M0–M7 tests
+```
+
+## Production vs demo measurement (read this)
+
+| | How `actual` is obtained |
+|---|---|
+| **Production** | wait `MEASURE_WINDOW_DAYS = 7` after execution, then `actual = profit after − profit before` for the affected campaigns, **minus the same change on a holdout of similar unchanged campaigns** (or an M4b synthetic control) so seasonality and platform-wide shocks cancel out. Always from **store orders (M2 truth)**, never platform-reported numbers |
+| **This demo** | **simulated**: `actual = predicted × (1 + N(−5%, 12%))`, with the RNG seeded by `md5(decision_id)` so the same decision always gives the same number. Every outcome carries `simulated: true`, the report carries a note saying so, and every brain event message ends in "· simulated" |
+
+Simulating is the honest way to demonstrate the loop before a week of real data exists: the numbers prove the *mechanism* (record → compare → calibrate → change future behaviour), not the forecast quality of a real campaign, and nothing in the product hides that.
+
+## Seeded history
+
+So the brain starts with memory, the first call seeds `SEED_HISTORY_N = 12` past outcomes (once; deleting `state.json` regenerates the identical set). Dates are spread evenly from 60 to 5 days before `END_DATE`. For outcome *i* = 0…11:
+
+```
+predicted ~ U(₹4,000, ₹22,000)
+error SD  = 0.35 × 0.85^i        optimism bias = −0.10 × 0.8^i
+actual    = predicted × (1 + N(bias, SD))
+```
+
+Both the spread and the bias shrink with *i*, so the rolling error falls: the engine visibly learned. The twelve titles are fixed realistic past actions ("Trim programmatic loss-makers", "Scale Amazon Hiking Boot", "Refresh TikTok creative", …) on real campaign ids; their synapses are updated too. The history is the past: it emits **no** brain events.
+
+## Metrics
+
+| Metric | Definition | This run |
+|---|---|---|
+| **MAPE** (forecast error) | mean \|error %\| over the last 8 measurable outcomes | **7.9%** |
+| **Calibration factor** | `clip(mean(actual ÷ predicted), 0.6, 1.2)` over the same 8 | **1.014** |
+| **Win-rate** | share of those outcomes with `actual > 0` | **100%** |
+| **Rolling MAPE** | MAPE over a sliding window of 4 outcomes (accuracy chart) | **27.6% → 5.9%** (first full window → last) |
+| **Cumulative profit** | running Σ of measured `actual` ₹/day (the Learning chart) | ₹1.47L/day after the 12 seeded outcomes |
+
+Data-quality actions (|predicted| < ₹1, e.g. data fixes) are recorded with `measurable: false` and excluded from every metric above.
+
+## How learning changes future decisions
+
+1. **Calibrated ₹**: M6 multiplies every expected ₹/day by `state.calibration.factor`. A habitually optimistic history (factor < 1) makes the engine promise less, and a smaller promised impact can drop a decision under the ₹40k "high-risk impact" line.
+2. **Calibrated confidence**: confidence is scaled by `(1 − 0.5 × MAPE)`, so a less accurate engine reports lower confidence, which lowers priority in the inbox (approval tiers themselves depend on risk and size, not on confidence).
+3. **Closed loop into M5**: executed budgets become `budget_overrides`, so the next curve fit and plan start from where the money now is.
+4. **Clipping**: the factor never leaves [0.6, 1.2] (verified by test), so one catastrophic outcome cannot swing every future prediction; MAPE itself is reported unclipped.
+5. **Rollback is learning-safe**: rolling a decision back removes its outcome and reverses its synapse changes exactly, and the calibration is recomputed.
+
+## Synapse learning (the brain's visible memory)
+
+Each outcome updates the campaign → SKU edges it touched (launch tests use `TST-xxxxxx → SKU`; data fixes touch none):
+
+| Outcome | Delta |
+|---|---|
+| good: `actual > 0` and \|error\| ≤ 25% | **+0.25** |
+| loss: `actual ≤ 0` | **−0.15** |
+| otherwise (profitable but a poor forecast) | **+0.125** |
+
+Strength = `clip(current (default 1.0) + delta, 0.5, 3.0)`. The *applied* (post-clipping) delta is stored on the outcome, so removing it reverses the memory exactly. After seeding, the strongest edge is `CMP-11→SKU-G` at 1.38 (touched by two outcomes), followed by a group at 1.25 (e.g. `CMP-01→SKU-A`, `CMP-02→SKU-A`, `CMP-04→SKU-B`, `CMP-06→SKU-C`, `CMP-07→SKU-C`). The brain shows synapse **thickness = strength**.
+
+## Brain integration
+
+For every new, non-seeded outcome M7 emits one `outcome` event (region `learn`, path `learn`): severity *low* for a good outcome (or a data fix), *medium* otherwise; message `"Protect stock · cut ads on Running Pro by 60%: predicted ₹53.6k/day → actual ₹55.4k/day (+3%) · simulated"`; payload `{decision_id, predicted, actual, error_pct, simulated, measurable, synapses: [{key, strength, delta}], calibration: {factor, mape, win_rate, n}}`. The UI plays an amber Learn-lobe pulse per outcome, thickens or thins the synapses, and draws the Learning page (accuracy curve, cumulative profit, KPIs) from `learning_report()`.
+
+The loop is wired through M6's hooks: `on_executed` → `record_outcomes()`, `on_rolled_back` → `remove_outcome()`. A hook failure never breaks an execution, and `emit_brain_events=False` silences the Learn-lobe pulses too. The approval pulse is emitted *before* the learning hook runs, so the event order reads approve → learn.
+
+## Demo numbers
+
+Approving the top decision ("Protect stock · cut ads on Running Pro by 60%") records **predicted ₹53,566/day → actual ₹55,422/day (+3.5%)**, simulated, strengthens `CMP-03→SKU-B`, `CMP-04→SKU-B` and `CMP-05→SKU-B` by 0.25 each, and shifts the calibration window.
 
 ---
 

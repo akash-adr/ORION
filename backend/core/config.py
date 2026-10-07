@@ -243,3 +243,27 @@ PLAN_SCALE_THRESHOLD = 1.15  # optimizer plan > 115% of current → scale_up
 PLAN_CUT_THRESHOLD = 0.85  # optimizer plan < 85% of current → budget_cut
 OPP_LAUNCH_N = 2  # top opportunities turned into launch tests
 OPP_IMPACT_HAIRCUT = 0.6  # expected test value = (pred POAS − 1) × budget × 0.6
+
+# ---------------------------------------------------------------------------
+# 2.16 Closed-loop learning (added for M7, additive)
+# ---------------------------------------------------------------------------
+MEASURE_WINDOW_DAYS = 7  # production: wait 7 days after execution before measuring
+OUTCOME_BIAS_MEAN = -0.05  # demo: predictions are slightly optimistic
+OUTCOME_NOISE_SD = 0.12  # demo: spread of simulated outcomes around the prediction
+CALIBRATION_WINDOW = 8  # the last 8 measurable outcomes drive calibration
+ROLLING_WINDOW = 4  # rolling MAPE window for the accuracy chart
+CALIBRATION_MIN = 0.6  # the calibration factor never leaves [0.6, 1.2]
+CALIBRATION_MAX = 1.2
+SEED_HISTORY_N = 12  # seeded historical outcomes (so the brain starts with memory)
+SEED_PRED_MIN = 4000  # seeded predictions ₹/day ~ U(min, max)
+SEED_PRED_MAX = 22000
+SEED_ERR_SD0 = 0.35  # seeded forecast error SD for the oldest outcome ...
+SEED_ERR_DECAY = 0.85  # ... shrinking by this factor per outcome (the engine "gets better")
+SEED_BIAS0 = -0.10  # seeded optimism bias for the oldest outcome ...
+SEED_BIAS_DECAY = 0.8  # ... shrinking by this factor per outcome
+SYNAPSE_BASE = 1.0  # starting synapse strength in the brain
+SYNAPSE_GAIN = 0.25  # a good outcome strengthens the campaign→SKU synapse
+SYNAPSE_DECAY = 0.15  # a loss-making outcome weakens it
+SYNAPSE_MIN = 0.5
+SYNAPSE_MAX = 3.0
+SYNAPSE_GOOD_ERROR = 0.25  # "good" = actual > 0 and |error| ≤ 25%
