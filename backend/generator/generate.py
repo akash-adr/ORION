@@ -18,7 +18,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from backend.core.config import AUDIENCES, CHANNELS, END_DATE, N_DAYS, RAW_DIR, SEED
+from backend.core import config
+from backend.core.config import (
+    ACTION_TYPES, ANOMALY_KINDS, AUDIENCES, BRAIN_EVENT_TYPES, BRAIN_REGIONS, CHANNELS, END_DATE, N_DAYS,
+    RAW_DIR, SEED,
+)
 from backend.core.metrics import format_inr
 
 T = N_DAYS  # shorthand used in scenario windows
@@ -384,12 +388,171 @@ def build_ground_truth() -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Neural Brain manifest (static structure only; live metrics come from M9 /brain/nodes)
+# ---------------------------------------------------------------------------
+MANIFEST_VERSION = 1
+AD_SOURCE = {  # channel → (source id, label) of the data-stream node feeding its campaigns
+    "meta": ("meta_ads", "Meta Ads"),
+    "google": ("google_ads", "Google Ads"),
+    "amazon": ("amazon_ads", "Amazon Ads"),
+    "tiktok": ("tiktok_ads", "TikTok Ads"),
+    "programmatic": ("programmatic", "Programmatic"),
+}
+OTHER_SOURCES = [  # non-ad data streams; each feeds every SKU neuron
+    {"id": "store", "label": "Store Orders", "kind": "store", "channel": None, "file": "orders.csv"},
+    {"id": "inventory", "label": "Inventory (ERP)", "kind": "erp", "channel": None, "file": "inventory.csv"},
+    {"id": "ga4", "label": "GA4 Funnel", "kind": "analytics", "channel": None, "file": "ga_events.csv"},
+    {"id": "pricing", "label": "Pricing", "kind": "pricing", "channel": None, "file": "pricing.csv"},
+]
+CLUSTER_LABELS = {"meta": "Meta", "google": "Google", "amazon": "Amazon", "tiktok": "TikTok",
+                  "programmatic": "Programmatic", "catalog": "Product Catalog"}
+DIRECTIONS = ("gain", "loss")  # whether a stimulus / scenario helps or hurts profit
+
+
+def build_brain_manifest(
+    dates: pd.DatetimeIndex, skus: pd.DataFrame, campaigns: pd.DataFrame, events: pd.DataFrame
+) -> dict:
+    """Static Neural Brain structure: sources, clusters, neurons, synapses, stimuli, scenario timeline.
+
+    Deterministic (dates derive from END_DATE, never the wall clock) and free of live metrics.
+    """
+    d = lambda t: dates[t].strftime("%Y-%m-%d")  # noqa: E731
+    first, last = d(0), d(len(dates) - 1)
+    sku_ids = list(skus["sku_id"])
+    by_channel = {ch: list(campaigns.loc[campaigns["channel"] == ch, "campaign_id"]) for ch in CHANNELS}
+
+    sources = [
+        {"id": AD_SOURCE[ch][0], "label": AD_SOURCE[ch][1], "kind": "ad_platform", "channel": ch,
+         "file": "ad_performance.csv"}
+        for ch in CHANNELS
+    ] + [dict(s) for s in OTHER_SOURCES]
+    clusters = [{"id": ch, "label": CLUSTER_LABELS[ch]} for ch in CHANNELS] + [
+        {"id": "catalog", "label": CLUSTER_LABELS["catalog"]}
+    ]
+
+    neurons = [
+        {"entity_id": c.campaign_id, "entity_type": "campaign", "label": c.campaign_name, "cluster": c.channel,
+         "channel": c.channel, "sku_id": c.sku_id, "audience": c.audience, "format": c.format,
+         "daily_budget": int(c.daily_budget)}
+        for c in campaigns.itertuples(index=False)
+    ] + [
+        {"entity_id": s.sku_id, "entity_type": "sku", "label": s.name, "cluster": "catalog", "channel": None,
+         "sku_id": s.sku_id, "category": s.category, "margin_pct": float(s.margin_pct)}
+        for s in skus.itertuples(index=False)
+    ]
+
+    synapses = (
+        [{"source": AD_SOURCE[c.channel][0], "target": c.campaign_id, "kind": "feeds"}
+         for c in campaigns.itertuples(index=False)]
+        + [{"source": c.campaign_id, "target": c.sku_id, "kind": "promotes"}
+           for c in campaigns.itertuples(index=False)]
+        + [{"source": src["id"], "target": sku, "kind": "feeds"} for src in OTHER_SOURCES for sku in sku_ids]
+    )
+
+    ev = events.set_index("event_id")
+    stimuli = []
+    if "EV-1" in ev.index:
+        stimuli.append({"event_id": "EV-1", "date": ev.at["EV-1", "date"], "type": "sale", "targets": sku_ids,
+                        "direction": "gain", "label": "Independence Day sale"})
+    stimuli += [
+        {"event_id": "EV-2", "date": ev.at["EV-2", "date"], "type": "price_change",
+         "targets": [S6_SKU] + list(campaigns.loc[campaigns["sku_id"] == S6_SKU, "campaign_id"]),
+         "direction": "loss", "label": "Casual X price raise"},
+        {"event_id": "EV-3", "date": ev.at["EV-3", "date"], "type": "competitor", "targets": by_channel[S3_CHANNEL],
+         "direction": "loss", "label": "Competitor sale on Google"},
+        {"event_id": "EV-4", "date": ev.at["EV-4", "date"], "type": "creative_launch", "targets": [S7_CAMPAIGN],
+         "direction": "gain", "label": "UGC creative launch"},
+    ]
+
+    def anomaly(sc, start, entities, kind, region, direction, module, headline):
+        return {"scenario": sc, "start_date": start, "end_date": last, "entities": entities,
+                "expected_event_type": "anomaly", "expected_kind": kind, "expected_region": region,
+                "direction": direction, "detector_module": module, "headline": headline}
+
+    def recommendation(sc, start, entities, action, direction, module, headline):
+        return {"scenario": sc, "start_date": start, "end_date": last, "entities": entities,
+                "expected_event_type": "recommendation", "expected_action": action, "expected_region": "decide",
+                "direction": direction, "detector_module": module, "headline": headline}
+
+    sku_campaigns = lambda sku: list(campaigns.loc[campaigns["sku_id"] == sku, "campaign_id"])  # noqa: E731
+    timeline = [
+        anomaly("S1", d(S1_START), [S1_CAMPAIGN, "SKU-A"], "creative_fatigue", "diagnose", "loss", "M3",
+                "Creative fatigue on Meta · Summer Sneakers"),
+        anomaly("S2", d(S2_DECLINE_START), [S2_SKU] + sku_campaigns(S2_SKU), "stockout_risk", "diagnose", "loss",
+                "M3", "Running Pro stock running out — budget increases locked"),
+        anomaly("S3", d(S3_START), by_channel[S3_CHANNEL], "cpc_spike", "diagnose", "loss", "M3",
+                "Google CPC spike from competitor sale"),
+        recommendation("S4", first, ["CMP-06", "CMP-07", "SKU-C"], "scale_up", "gain", "M5",
+                       "Trail Max is under-funded — room to scale"),
+        anomaly("S5", first, sorted(by_channel["meta"] + by_channel["google"]), "attribution_inflation", "ingest",
+                "loss", "M2", "Meta and Google over-report conversions"),
+        anomaly("S6", d(S6_START), [S6_SKU] + sku_campaigns(S6_SKU), "conversion_drop", "diagnose", "loss",
+                "M3 + M4b", "Casual X price hike cut conversions"),
+        anomaly("S7", d(S7_START), [S7_CAMPAIGN, "SKU-J"], "positive_spike", "diagnose", "gain", "M3",
+                "Viral UGC creative on TikTok · Gym Flex"),
+        recommendation("S8", first, [], "launch_test", "gain", "M5b",
+                       "Untested product × channel combinations scored before spend"),
+    ]
+    replay_order = [x["scenario"] for x in sorted(timeline, key=lambda x: (x["start_date"], int(x["scenario"][1:])))]
+
+    hero_story = {"steps": [
+        {"step": 1, "scenario": "S1", "focus": "CMP-01", "beat": "Summer Sneakers neuron turns red — creative fatigue"},
+        {"step": 2, "scenario": "S1", "focus": "CMP-01", "beat": "Pulse to Diagnose: frequency up, CTR down"},
+        {"step": 3, "scenario": "S4", "focus": "CMP-06", "beat": "Decide: move budget toward under-funded Trail Max"},
+        {"step": 4, "scenario": "S2", "focus": "SKU-B", "beat": "Running Pro locked — stock guardrail blocks increases"},
+        {"step": 5, "scenario": "S4", "focus": "CMP-06",
+         "beat": "Approve → synapse CMP-06 → SKU-C brightens; Learning tracks predicted vs actual"},
+    ]}
+
+    manifest = {
+        "version": MANIFEST_VERSION,
+        "seed": SEED,
+        "date_range": {"start": first, "end": END_DATE, "n_days": N_DAYS},
+        "sources": sources,
+        "clusters": clusters,
+        "neurons": neurons,
+        "synapses": synapses,
+        "stimuli": stimuli,
+        "scenario_timeline": timeline,
+        "replay_order": replay_order,
+        "hero_story": hero_story,
+    }
+    _assert_manifest_enums(manifest)
+    return manifest
+
+
+def _assert_manifest_enums(m: dict) -> None:
+    """Every enum value in the manifest must come from M0 config."""
+    for src in m["sources"]:
+        assert src["channel"] is None or src["channel"] in CHANNELS, src
+    cluster_ids = {c["id"] for c in m["clusters"]}
+    assert cluster_ids == set(CHANNELS) | {"catalog"}
+    node_ids = {n["entity_id"] for n in m["neurons"]} | {s["id"] for s in m["sources"]}
+    for n in m["neurons"]:
+        assert n["cluster"] in cluster_ids and (n["channel"] is None or n["channel"] in CHANNELS), n
+    for syn in m["synapses"]:
+        assert syn["source"] in node_ids and syn["target"] in node_ids, syn
+    for st in m["stimuli"]:
+        assert st["direction"] in DIRECTIONS and all(t in node_ids for t in st["targets"]), st
+    for sc in m["scenario_timeline"]:
+        assert sc["expected_event_type"] in BRAIN_EVENT_TYPES, sc
+        assert sc["expected_region"] in BRAIN_REGIONS, sc
+        assert sc["direction"] in DIRECTIONS, sc
+        if "expected_kind" in sc:
+            assert sc["expected_kind"] in ANOMALY_KINDS, sc
+        if "expected_action" in sc:
+            assert sc["expected_action"] in ACTION_TYPES, sc
+        assert all(e in node_ids for e in sc["entities"]), sc
+
+
 AD_COLUMNS = ["date", "channel", "campaign_id", "sku_id", "audience", "creative_id", "spend", "impressions",
               "clicks", "frequency", "platform_conversions", "platform_revenue"]
 
 
-def write_outputs(raw_dir: Path, frames: dict[str, pd.DataFrame], ground_truth: dict) -> int:
-    """Write every CSV (index=False, fixed column order) and ground_truth.json. Returns file count."""
+def write_outputs(raw_dir: Path, frames: dict[str, pd.DataFrame], ground_truth: dict, manifest: dict) -> int:
+    """Write every CSV (index=False, fixed column order), ground_truth.json and brain_manifest.json.
+    Returns the number of files written."""
     raw_dir.mkdir(parents=True, exist_ok=True)
     for name, df in frames.items():
         num = df.select_dtypes("number")
@@ -398,11 +561,15 @@ def write_outputs(raw_dir: Path, frames: dict[str, pd.DataFrame], ground_truth: 
     with open(raw_dir / "ground_truth.json", "w", encoding="utf-8", newline="\n") as f:
         json.dump(ground_truth, f, indent=2, sort_keys=False, ensure_ascii=False)
         f.write("\n")
-    return len(frames) + 1
+    with open(raw_dir / "brain_manifest.json", "w", encoding="utf-8", newline="\n") as f:
+        json.dump(manifest, f, indent=2, sort_keys=False, ensure_ascii=False)
+        f.write("\n")
+    return len(frames) + 2
 
 
-def main() -> None:
-    """Generate all datasets and write them into RAW_DIR."""
+def main(raw_dir: Path | None = None, quiet: bool = False) -> Path:
+    """Generate all datasets into raw_dir (default: config.RAW_DIR, read at call time). Returns the folder."""
+    out_dir = Path(raw_dir if raw_dir is not None else config.RAW_DIR)
     rng = np.random.default_rng(SEED)
     dates = build_dates()
     skus = build_skus()
@@ -430,11 +597,14 @@ def main() -> None:
         "creatives.csv": creatives,
         "events.csv": events,
     }
-    n_files = write_outputs(Path(RAW_DIR), frames, build_ground_truth())
+    manifest = build_brain_manifest(dates, skus, campaigns, events)
+    n_files = write_outputs(out_dir, frames, build_ground_truth(), manifest)
 
     spend_per_day = sim["spend"].sum() / N_DAYS
-    print(f"M1 OK · {N_DAYS} days to {END_DATE} · {len(campaigns)} campaigns · {len(skus)} SKUs · "
+    if not quiet:
+        print(f"M1 OK · {N_DAYS} days to {END_DATE} · {len(campaigns)} campaigns · {len(skus)} SKUs · "
           f"spend {format_inr(spend_per_day)}/day · {n_files} files written")
+    return out_dir
 
 
 if __name__ == "__main__":

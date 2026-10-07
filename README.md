@@ -281,11 +281,19 @@ log_brain_event(make_brain_event("anomaly", entity_id="CMP-01", ref_id="AN-001",
 5. Document threshold changes here with the reason.
 6. Units never change.
 
+### Contract changes log
+
+| Date | Change | Why |
+|---|---|---|
+| 2026-10-07 | Appended `"brain_manifest.json"` to `db.RAW_FILES` (additive, nothing renamed or reordered) | The Neural Brain needs the static structure (sources, neurons, synapses, scenario timeline) written by M1 |
+
 ## 12. Assumptions
 
 _(Team: add assumptions here as they are made.)_
 
--
+- **M1 calibration (2026-10-07):** every Part 1 ratio was already within the ±20% tolerance with the original knobs, so nothing was tuned. Final knobs: `CVR_SCALE = 1.0`; `CH_CVR` meta 1.00, google 1.15, amazon 1.30, tiktok 0.80, programmatic 0.70; `ELASTICITY = -2.5`. Achieved economics are in the Module 1 section below.
+- **M1 blended POAS is 1.02 (target 0.93, +10%)**: inside tolerance. Lowering `CVR_SCALE` to ~0.91 would hit 0.93 but pushes TikTok true ROAS to ~1.24 and Amazon to ~4.0. Left as is.
+- **M1 weekly budget tests** use calendar weeks (Monday–Sunday) for the first 55 days; the last 35 days run at budget so detection baselines are clean.
 
 ## 13. Common mistakes
 
@@ -295,6 +303,132 @@ _(Team: add assumptions here as they are made.)_
 - Renaming fields mid-hackathon.
 - Running files directly (`python backend/core/smoke_test.py`) instead of `python -m backend.core.smoke_test`.
 - Committing `data/engine.db` or `data/state.json`.
+
+---
+
+# Module 1 — Data Generator
+
+> **Pitch line:** "We built a realistic Indian D2C world with eight hidden problems and an answer key — so instead of claiming accuracy, we prove it: the engine finds every one."
+
+`backend/generator/generate.py` builds 90 days (2026-07-09 → 2026-10-06) of fully linked data for a fictional Indian footwear brand: 10 SKUs, 16 campaigns, 5 channels. One seeded random generator, fixed iteration order, byte-identical on every run (~0.5 s). It writes only to `data/raw/`; never to `engine.db`, `state.json` or the brain event log.
+
+## How to run
+
+```bash
+python -m backend.generator.generate    # writes 12 files into data/raw/
+python -m backend.generator.validate    # 15-point PASS/FAIL table, exit 1 on any failure
+python -m pytest -q                     # M0 + M1 tests (M1 generates into a temp folder)
+```
+
+## The business world
+
+**Products**
+
+| SKU | Name | Category | Price ₹ | COGS ₹ | Margin | Rating | Organic/day | Role |
+|---|---|---|---|---|---|---|---|---|
+| SKU-A | Summer Sneakers | lifestyle | 2,499 | 2,050 | 0.18 | 4.0 | 12 | low margin, heavily advertised → fatigue |
+| SKU-B | Running Pro | running | 3,999 | 2,360 | 0.41 | 4.6 | 18 | best seller → stockout risk |
+| SKU-C | Trail Max | running | 4,499 | 2,250 | 0.50 | 4.5 | 6 | high margin, under-funded |
+| SKU-D | Casual X | lifestyle | 1,999 | 1,200 | 0.40 | 4.2 | 14 | price hike → conversion drop |
+| SKU-E | Kids Glow | kids | 1,499 | 750 | 0.50 | 4.4 | 8 | overstocked |
+| SKU-F | Office Loafer | formal | 2,999 | 1,800 | 0.40 | 4.1 | 7 | programmatic loss-maker |
+| SKU-G | Slide Comfort | casual | 899 | 450 | 0.50 | 4.0 | 20 | cheap, weak on TikTok |
+| SKU-H | Hiking Boot | outdoor | 5,499 | 3,300 | 0.40 | 4.3 | 4 | premium, Amazon |
+| SKU-I | Sock Pack | accessories | 499 | 200 | 0.60 | 4.2 | 25 | low-price add-on |
+| SKU-J | Gym Flex | training | 2,799 | 1,500 | 0.46 | 4.4 | 9 | viral TikTok creative |
+
+**Channels**
+
+| Channel | CPM ₹ | Base CTR | CVR mult | Platform over-reporting |
+|---|---|---|---|---|
+| meta | 220 | 0.012 | 1.00 | 1.22 |
+| google | 600 | 0.035 | 1.15 | 1.15 |
+| amazon | 450 | 0.020 | 1.30 | 1.00 |
+| tiktok | 150 | 0.010 | 0.80 | 1.00 |
+| programmatic | 110 | 0.004 | 0.70 | 1.00 |
+
+Audience base CVR: broad 0.010 · lookalike 0.014 · interest 0.012 · retargeting 0.028. Price elasticity −2.5.
+
+**Campaigns**
+
+| ID | Channel | SKU | Audience | Budget ₹/day | Sat mult | Format | Full-period POAS |
+|---|---|---|---|---|---|---|---|
+| CMP-01 | meta | SKU-A | broad | 50,000 | 0.6 | static | 0.17 |
+| CMP-02 | google | SKU-A | interest | 25,000 | 1.0 | search_text | 0.33 |
+| CMP-03 | meta | SKU-B | lookalike | 40,000 | 1.2 | video | 1.57 |
+| CMP-04 | google | SKU-B | interest | 30,000 | 1.2 | search_text | 1.57 |
+| CMP-05 | amazon | SKU-B | retargeting | 20,000 | 1.0 | sponsored | 2.81 |
+| CMP-06 | google | SKU-C | interest | 8,000 | 4.0 | search_text | 2.98 |
+| CMP-07 | meta | SKU-C | lookalike | 6,000 | 4.0 | video | 2.74 |
+| CMP-08 | meta | SKU-D | broad | 25,000 | 1.0 | carousel | 0.47 |
+| CMP-09 | amazon | SKU-D | interest | 15,000 | 1.0 | sponsored | 0.56 |
+| CMP-10 | tiktok | SKU-J | broad | 15,000 | 1.5 | video | 0.89 |
+| CMP-11 | tiktok | SKU-G | interest | 10,000 | 1.0 | video | 0.27 |
+| CMP-12 | programmatic | SKU-F | broad | 18,000 | 0.8 | display | 0.26 |
+| CMP-13 | amazon | SKU-H | interest | 15,000 | 1.0 | sponsored | 1.53 |
+| CMP-14 | meta | SKU-E | retargeting | 8,000 | 1.5 | carousel | 1.49 |
+| CMP-15 | google | SKU-I | interest | 6,000 | 1.0 | search_text | 0.22 |
+| CMP-16 | programmatic | SKU-A | retargeting | 10,000 | 1.0 | display | 0.30 |
+
+## The 8 planted scenarios
+
+T = 90 (day index t = 0..89). Answer key: `data/raw/ground_truth.json`.
+
+| # | Scenario | Exact injection | Must be found by |
+|---|---|---|---|
+| S1 | Creative fatigue, CMP-01 | t ≥ T−14: k ramps 0→1; frequency = 1.8 + 2.4·k; CTR × (1 − 0.5·k) | M3 |
+| S2 | Stockout risk, SKU-B | days of cover 40 until t = 60, then falls linearly to 5; no inbound after t = 60 | M3 (guardrail in M5/M6) |
+| S3 | Google CPC spike | t ≥ T−7: CPM × 1.6 on CMP-02, 04, 06, 15 (EV-3) | M3 |
+| S4 | Under-funded winner | CMP-06 and CMP-07 saturation = 4 × budget (all days) | M5 |
+| S5 | Double counting | platform conversions × 1.22 (Meta), × 1.15 (Google), all days | M2 reconciliation |
+| S6 | Price hike, SKU-D | price 1,999 → 2,299 for t ≥ T−14 (EV-2); elasticity −2.5 lowers paid and organic CVR | M3 + M4b |
+| S7 | Viral creative, CMP-10 | t ≥ T−7: CTR × 2.2, creative CR-10a → CR-10b UGC (EV-4) | M3 |
+| S8 | Untested opportunity | most SKU × channel × audience combinations never funded | M5b |
+
+## How each scenario appears in the Neural Brain
+
+| # | Start | Brain event | Kind / action | Region | Direction | Entities |
+|---|---|---|---|---|---|---|
+| S1 | 2026-09-23 | anomaly | creative_fatigue | diagnose | loss | CMP-01, SKU-A |
+| S2 | 2026-09-07 | anomaly | stockout_risk | diagnose | loss | SKU-B, CMP-03, CMP-04, CMP-05 |
+| S3 | 2026-09-30 | anomaly | cpc_spike | diagnose | loss | CMP-02, CMP-04, CMP-06, CMP-15 |
+| S4 | 2026-07-09 | recommendation | scale_up | decide | gain | CMP-06, CMP-07, SKU-C |
+| S5 | 2026-07-09 | anomaly | attribution_inflation | ingest | loss | all Meta + Google campaigns |
+| S6 | 2026-09-23 | anomaly | conversion_drop | diagnose | loss | SKU-D, CMP-08, CMP-09 |
+| S7 | 2026-09-30 | anomaly | positive_spike | diagnose | gain | CMP-10, SKU-J |
+| S8 | 2026-07-09 | recommendation | launch_test | decide | gain | (none: unfunded combos) |
+
+Replay order (by start date, ties by scenario number): **S4, S5, S8, S2, S1, S6, S3, S7**.
+
+## Brain manifest (`data/raw/brain_manifest.json`)
+
+Static structure only; live numbers (spend, POAS, health, size) come from M9's `/brain/nodes`. Deterministic, dated from `END_DATE`, every enum validated against M0.
+
+| Key | Contents |
+|---|---|
+| `version`, `seed`, `date_range` | 1, 42, `{start, end, n_days}` |
+| `sources` | 9 data-stream nodes: 5 ad platforms (feed `ad_performance.csv`) + store, inventory, ga4, pricing |
+| `clusters` | meta, google, amazon, tiktok, programmatic, catalog |
+| `neurons` | 26: 16 campaigns (meta 5, google 4, amazon 3, tiktok 2, programmatic 2) + 10 SKUs (catalog), static attributes only |
+| `synapses` | 72: 16 ad source → campaign `feeds`, 16 campaign → SKU `promotes`, 40 store/inventory/ga4/pricing → SKU `feeds` |
+| `stimuli` | EV-1 sale (gain, all SKUs), EV-2 price raise (loss), EV-3 competitor (loss), EV-4 UGC launch (gain) |
+| `scenario_timeline` | S1–S8 as expected brain pulses (table above), with detector module and headline |
+| `replay_order` | scenario ids for `/brain/replay` |
+| `hero_story` | the 5-step, 30-second demo path (S1 → S1 → S4 → S2 → S4) |
+
+## Achieved economics (calibration)
+
+Knobs: `CVR_SCALE = 1.0`, `CH_CVR` unchanged (no tuning was needed; all within ±20%).
+
+| Metric | Target | Achieved |
+|---|---|---|
+| Average daily spend | ≈ ₹3.0L | ₹2.96L |
+| True ROAS Amazon / Google / Meta / TikTok / Programmatic | 4.5 / 3.1 / 2.1 / 1.5 / 1.0 | 4.39 / 3.07 / 2.22 / 1.36 / 1.01 |
+| Platform ROAS Meta / Google | 2.6 / 3.5 | 2.71 / 3.53 |
+| Attribution inflation Meta / Google | +22% / +15% | +22.1% / +15.0% |
+| Blended POAS | 0.93 | 1.02 |
+| Profitable campaigns (POAS > 1) | CMP-03, 04, 05, 06, 07, 13, 14 | exact match |
+| CMP-02 ("ROAS lies") | ROAS ≈ 1.9, POAS < 1 | ROAS 1.85, POAS 0.33 |
 
 ---
 

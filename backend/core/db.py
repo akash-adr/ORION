@@ -72,6 +72,7 @@ RAW_FILES: list[str] = [
     "creatives.csv",
     "events.csv",
     "ground_truth.json",
+    "brain_manifest.json",
 ]
 
 _TABLE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
