@@ -222,6 +222,10 @@ def default_state() -> dict:
         "active_anomalies": {},  # stable key → {id, kind, entity_id, severity, first_seen, last_seen, profit_impact}
         "detection_quality": {},  # last evaluation against ground truth
         "active_diagnoses": {},  # stable anomaly key → signature of the last diagnosis pulse
+        "rec_signatures": {},  # rec id → signature, for brain-event dedupe
+        "launched_tests": [],  # {rec_id, test_campaign_id, sku_id, channel, audience, daily_budget, launched_at, status}
+        "data_fixes": {},  # channel → {"conversion_source": "server_side", "applied_at", "rec_id"}
+        "last_build_at": None,  # when the recommendation inbox was last rebuilt
     }
 
 

@@ -289,6 +289,7 @@ log_brain_event(make_brain_event("anomaly", entity_id="CMP-01", ref_id="AN-001",
 | 2026-10-07 | Appended `RECON_GAP_THRESHOLD = 0.10`, `REFRESH_MINUTES = 5`, `FRESHNESS_WARN_MINUTES = 15` to `config.py` | M2 flags reconciliation gaps (S5); the demo loop and stale-data badge need shared intervals |
 | 2026-10-07 | Added `neuron_metrics`, `source_status`, `data_quality` to `db.TABLE_COLUMNS` | The Neural Brain needs live per-neuron numbers and per-stream status; data-quality results must be stored and shown |
 | 2026-10-07 | Appended `FATIGUE_FREQ_UP`, `FATIGUE_CTR_DOWN`, `CPC_SPIKE_MIN`, `SKU_RECENT_DAYS`, `SKU_BASELINE_DAYS`, `PROFIT_BASE_FLOOR`, `MAD_SCALE` to `config.py` | M3 detectors need shared, documented thresholds (fatigue, CPC spike, 14/28-day site-conversion windows, robust-z scaling) so no module hard-codes them |
+| 2026-10-07 | Added `rec_signatures`, `launched_tests`, `data_fixes`, `last_build_at` to `default_state()` (old state files gain them via `load_state`) | M6's executor records launched test campaigns and applied data fixes (so rollback can undo them) and deduplicates recommendation pulses by signature |
 | 2026-10-07 | Appended `CONF_BASE`, `CONF_Z_WEIGHT`, `CONF_Z_CAP`, `CONF_UNC_WEIGHT`, `CONF_MAPE_WEIGHT`, `RISK_MEDIUM_SHIFT`, `URGENCY_BONUS`, `STOCKOUT_HORIZON_DAYS`, `STOCKOUT_AD_CUT`, `POSITIVE_SCALE_UP`, `PLAN_SCALE_THRESHOLD`, `PLAN_CUT_THRESHOLD`, `OPP_LAUNCH_N`, `OPP_IMPACT_HAIRCUT` to `config.py` | M6 turns alerts, causes, budget plans and opportunities into ranked decisions; confidence, risk, urgency and every action size must come from shared, documented knobs |
 | 2026-10-07 | Appended `OPP_TEST_BUDGET`, `OPP_TOP_N`, `OPP_GHOST_N`, `RIDGE_ALPHA`, `CV_FOLDS`, `STOCK_FACTOR_PIVOT`, `STOCK_FACTOR_MIN`, `STOCK_FACTOR_MAX`, `HEADROOM_SCALE_POAS`, `HEADROOM_CUT_POAS` to `config.py`; added `curves`, `budget_plans`, `plan_summaries`, `opportunities`, `model_metrics` to `db.TABLE_COLUMNS` | M5b scores untested combinations before any spend and M5 persists curves, plans and model honesty metrics in brain-ready form for M6 / M9 / M10 |
 | 2026-10-07 | Appended `CURVE_POINTS`, `CURVE_B_MIN_MULT`, `CURVE_B_MAX_MULT`, `SATURATION_MULT`, `OPTIMIZER_MAX_ITER`, `OVERSTOCK_COVER_DAYS`, `OVERSTOCK_UPPER_MULT`, `CLEAR_INV_PIVOT_DAYS`, `CLEAR_INV_MAX_BONUS`, `LAUNCH_TEST_RESERVE`, `SIMULATE_MAX_MS` to `config.py` | M5 fits response curves, solves the budget allocation under guardrails and four objectives, and simulates what-ifs; none of these knobs may be hard-coded in the optimizer |
@@ -956,6 +957,130 @@ M5 writes `curves`, `budget_plans`, `plan_summaries`, `opportunities` and `model
 - **`model_metrics.r2_holdout`**: the honesty badge on the Opportunities panel.
 
 **M5 emits no brain events, by design.** It produces analysis; **M6** turns the max_profit plan, the opportunities and the anomalies into Recommendations and emits the `recommendation` pulses into the Decide lobe. (A test confirms M5 never touches `state.json`.)
+
+---
+
+# Module 6 — Decision Engine, Guardrails & Executor
+
+> **Pitch line:** "Small, safe moves run on autopilot; big ones wait for a human; anything that would push a product into a stockout is blocked — and every action is logged and reversible in one click."
+
+M6 is the Neural Brain's **Decide lobe**. It turns alerts (M3), causes (M4), budget plans and opportunities (M5) into a ranked inbox of executable decisions (the M0 `Recommendation` shape), then executes, rejects or rolls them back through a mock ad API, with five layers of guardrails and a full audit trail.
+
+```bash
+python -m backend.decisions.engine                       # refresh the inbox and print it
+python -m backend.decisions.engine --approve REC-567405  # approve (execute) one decision
+python -m backend.decisions.engine --reject REC-xxxxxx   # reject one
+python -m backend.decisions.engine --rollback REC-567405 # undo an executed one
+python -m backend.decisions.engine --autonomy autonomous --auto-apply   # switch mode / run the autopilot once
+python -m backend.decisions.engine --no-brain-events     # any of the above without brain events
+python -m backend.decisions.validate                     # 17-point PASS/FAIL table (temporary state only)
+python -m pytest -q                                      # M0–M6 tests
+```
+
+## Rules: signal → action
+
+Processed in this order, with a **covered set**: a campaign appears in only **one** recommendation's budget changes, so the earlier, more specific rule wins any conflict (e.g. Running Pro's campaigns belong to the stock action, not to the Google rebalance).
+
+| # | Signal | Action type | Recommended action | ₹/day impact |
+|---|---|---|---|---|
+| 1 | stockout_risk | inventory_protect | cut every uncovered campaign on the SKU to 40% of current | stockout value model (below) |
+| 2 | creative_fatigue | creative_refresh | rotate in a UGC variant + trim the campaign to its optimizer plan | curve delta |
+| 3a | conversion_drop with a price event | price_review | trim the SKU's campaigns to plan; payload carries the M4b causal summary | curve delta |
+| 3b | conversion_drop that is a viral knock-on | (none) | no recommendation of its own; its warning attaches to rule 4 | n/a |
+| 4 | positive_spike | scale_up | +30% (bounded by the optimizer's limits); +15% with a "scale carefully" note when a knock-on conversion drop exists | curve delta |
+| 5 | cpc_spike | bid_cap | rebalance the channel's uncovered campaigns to plan while auctions are expensive; also covers the knock-on profit drops | curve delta |
+| 6 | attribution_inflation | data_fix | switch the channel's conversion tracking to store-verified (server-side) | 0 |
+| 7 | standalone metric_shift | budget_cut | cut to plan | curve delta |
+| 8 | optimizer plan < 85% of current | budget_cut | ONE "Trim loss-making campaigns" for all remaining | Σ curve delta |
+| 9 | optimizer plan > 115% of current | scale_up | ONE "Scale under-funded high-margin campaigns" (asserted never to touch a low-stock SKU) | Σ curve delta |
+| 10 | top 2 untested opportunities | launch_test | ₹5k/day test campaign for the ghost neuron | (predicted POAS − 1) × ₹5,000 × 0.6 |
+
+"Curve delta" = Σ over the changed campaigns of `profit(new spend) − profit(current spend)` on the M5 response curves. Titles are built only from entity names and fixed wording (never ₹ amounts or counts), because a recommendation's id is the md5 of its title and must survive refreshes (`REC-567405` is always "Protect stock · cut ads on Running Pro by 60%").
+
+## Stockout value model
+
+When stock is about to run out, ads keep buying clicks that land on an empty page. Over a 14-day horizon (`STOCKOUT_HORIZON_DAYS`):
+
+```
+keep = cover × (GM₀ − s₀) + (H − cover) × (−s₀)             sell for `cover` days, then pay for dead clicks
+last = min(cover ÷ (GM₁ ÷ GM₀), H)                          cutting ads slows sales, so stock lasts longer
+cut  = last × (GM₁ − s₁) + (H − last) × (−s₁)
+value = (cut − keep) ÷ H                                     ₹/day
+```
+
+**Worked example from this run** (Running Pro: CMP-03/04/05, 5.0 days of cover): at today's spend GM₀ = ₹1,26,203/day on s₀ = ₹89,276; cutting to 40% gives GM₁ = ₹71,686 on s₁ = ₹35,710. `keep = 5 × 36,927 + 9 × (−89,276) = −₹6,18,844`; the stock now lasts `last = 5 ÷ (71,686 ÷ 1,26,203) = 8.8` days, `cut = 8.8 × 35,976 + 5.2 × (−35,710) = +₹1,31,075`; **value = (1,31,075 + 6,18,844) ÷ 14 = ₹53.6k/day**.
+
+## Scoring
+
+| Quantity | Formula |
+|---|---|
+| expected ₹/day | raw impact × `state.calibration.factor` (1.0 until M7 learns otherwise) |
+| confidence | `clip((0.55 + 0.08 × min(\|z\|, 4) − 0.15 × curve uncertainty) × (1 − 0.5 × MAPE), 0.45, 0.95)`; MAPE `None` counts as 0 |
+| shift | `\|Σ new − Σ current\| ÷ Σ current` of the changed campaigns; launch tests: `₹5,000 ÷ brand total spend`; data fixes: 0 |
+| risk | high if shift > 40% or \|impact\| > ₹40k; medium if shift > 10%; else low |
+| requires approval | `not (risk == "low" and shift < 10%)` |
+| blocked | any change **raises** spend on a campaign whose SKU has < 7 days of cover |
+| priority | `max(impact, 0) × confidence` + ₹5,000 urgency bonus for high risk |
+
+## The five guardrail layers
+
+1. **Optimizer bounds**: ±50% per day, the stock guard, and the total budget (M5).
+2. **Risk tiers**: only a low-risk move smaller than 10% is ever auto-eligible.
+3. **Hard block**: raising spend on a near-stockout SKU can **never** execute, even if a human approves it; it is re-checked against *current* data at execution time, so a decision that became unsafe after it was built is refused.
+4. **Autonomy mode**: *advisory* never executes; *supervised* needs a human; *autonomous* auto-applies only low-risk, unblocked, approval-free items.
+5. **Audit + rollback**: every action is logged with the exact previous budgets and reverses in one call.
+
+**Lifecycle**: `pending → executed → rolled_back`; `pending → rejected`; `executed →` (M7: outcome measured). Executed, rejected and rolled-back decisions keep their status: a refresh rebuilds only *pending* ones and never recreates the others as pending duplicates (so a rolled-back or rejected decision is not re-proposed). After execution the M5 curves are re-fitted, so the executed budgets become the new "current spend" (the closed loop) and the next refresh plans from them.
+
+## Mock ad API (`ads_api.py`)
+
+Same call shapes as the real APIs, so swapping in real clients changes only this class. Nothing touches the network; timestamps use an injectable clock.
+
+| Method | Endpoint | Mirrors |
+|---|---|---|
+| `update_budget(campaign_id, channel, daily_budget)` | `POST /{channel}/campaigns/{id}/budget` → `OK` | Meta adset `daily_budget` · Google CampaignBudgetService (`amount_micros` = ₹ × 1,000,000) · Amazon campaign budget · TikTok adgroup budget · DSP |
+| `create_test_campaign(sku, channel, audience, budget)` | `POST /{channel}/campaigns` → id `TST-<md5[:6]>` | campaign-create endpoints |
+| `set_conversion_source(channel, source)` | `POST /{channel}/conversions/settings` | Meta CAPI · Google enhanced conversions · TikTok Events API |
+| `pause_test_campaign(id, channel)` | `POST /{channel}/campaigns/{id}/pause` → `PAUSED` | campaign status update (rollback of a launch) |
+| `rotate_creative(campaign_id, channel, suggested)` | `POST /{channel}/campaigns/{id}/creatives` → `QUEUED` | creative rotation |
+
+## Autonomy modes and the autopilot
+
+| Mode | Behaviour |
+|---|---|
+| advisory | recommendations are shown; **nothing is ever executed** (execute is refused) |
+| supervised (default) | a human approves each decision; the autopilot never runs |
+| autonomous | after each refresh the autopilot executes every pending decision that is **unblocked, low-risk and approval-free**, with approver `autopilot`. Today that is the two launch tests and the two data fixes; the 7 budget moves still wait for a human |
+
+## The inbox from this run
+
+| # | Decision | ₹/day | Conf. | Risk | Approval | Action | Campaigns |
+|---|---|---|---|---|---|---|---|
+| 1 | Protect stock · cut ads on Running Pro by 60% | ₹53.6k | 67% | high | yes | inventory_protect | CMP-03, 04, 05 |
+| 2 | Refresh creative & trim budget · Meta · Summer Sneakers · broad | ₹24.2k | 74% | high | yes | creative_refresh | CMP-01 |
+| 3 | Review price & trim ads · Casual X | ₹14.9k | 73% | high | yes | price_review | CMP-08, 09 |
+| 4 | Trim loss-making campaigns | ₹18.4k | 45% | high | yes | budget_cut | CMP-11, 12, 13, 14, 16 |
+| 5 | Rebalance Google while auction prices are high | ₹13.5k | 70% | medium | yes | bid_cap | CMP-02, 06, 15 |
+| 6 | Launch test · Trail Max on Google (retargeting) | ₹13.6k | 45% | low | auto | launch_test | — |
+| 7 | Scale under-funded high-margin campaigns | ₹1.3k | 45% | high | yes | scale_up | CMP-07 |
+| 8 | Launch test · Trail Max on TikTok (retargeting) | ₹11.5k | 45% | low | auto | launch_test | — |
+| 9 | Scale winner · TikTok · Gym Flex · broad | ₹1.1k | 60% | medium | yes | scale_up | CMP-10 |
+| 10 | Optimise Meta on store-verified conversions | ₹0 | 55% | low | auto | data_fix | — |
+| 11 | Optimise Google on store-verified conversions | ₹0 | 55% | low | auto | data_fix | — |
+
+11 recommendations, ₹1.52L/day expected, 7 need approval, 4 auto-eligible, none blocked. The total is not the optimizer's ₹74.3k/day plan gain: the stock protection is valued as avoided wasted spend (₹53.6k) and launch tests add expected value.
+
+## Neural Brain integration
+
+| Event | Path | When | Payload |
+|---|---|---|---|
+| `recommendation` | diagnose → decide | each pending decision whose id is new or whose signature (`round(₹, -2)\|risk\|blocked\|requires_approval`) changed | rec id, action type, targets, anomaly id, related anomaly keys, ₹/day, confidence, risk, approval, blocked, campaigns with from/to budgets |
+| `approval` | decide → learn | a human executes | rec id, approver, targets, changes, API-call count, **synapses** (campaign → SKU `promotes` edges), launched test, data fix |
+| `auto_apply` | decide → learn | the autopilot executes | same payload; shown as "⚡ autopilot" |
+| `rejection` | decide | a human rejects | rec id, reason |
+| `rollback` | learn → decide | rollback | rec id, **restored budgets**, API-call count |
+
+The UI: recommendation pulses travel anomaly neuron → Diagnose → Decide and add an inbox card; **approval pulses** (Decide → Learn) resize the neurons to their new budgets (from `budget_overrides`) and flash the listed synapses; `auto_apply` shows the ⚡ marker; a launched test turns its **ghost neuron into a solid TEST neuron**; `data_fixes` put a "store-verified" badge on the data stream; rollback pulses reverse all of it. `emit_brain_events=False` (and every test) logs nothing. M7 (learning) is not built: executions call `hooks.on_executed` / `hooks.on_rolled_back`, no-ops that M7 will implement, and a hook failure can never break an execution.
 
 ---
 
