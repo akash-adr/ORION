@@ -2,12 +2,13 @@
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
-import { AdditiveBlending, Color, Group, MathUtils, Mesh, MeshBasicMaterial, PointsMaterial, Vector3 } from "three";
+import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, Group, MathUtils, Mesh, MeshBasicMaterial, PointsMaterial, Vector3 } from "three";
 import type { BrainData } from "@/components/brain/brainData";
 import type { V3 } from "@/lib/brain/layout";
 import { useBrainPlayer } from "@/lib/brain/store";
 import { prefersReducedMotion, readToken } from "@/lib/brain/tokens";
-import type { ProjectionBus } from "@/lib/brain/types";
+import type { Anchors, ProjectionBus } from "@/lib/brain/types";
+import type { BrainRegion } from "@/lib/types";
 
 const POOL = 6;
 const TONE_TOKEN = { loss: "--loss", gain: "--gain", risk: "--risk", synapse: "--synapse" } as const;
@@ -28,9 +29,22 @@ interface Props {
   fit: number;
   /** key of the item the camera should ease toward, or null for the overview */
   focusKey: string | null;
+  /* Optional, additive (the Pitch page): every one defaults to the original behaviour. */
+  /** ease toward a brain region's centre instead of an item */
+  focusRegion?: BrainRegion | null;
+  /** tint the dots of these regions with their region colour */
+  tintRegions?: BrainRegion[];
+  /** dim the dots outside the tinted regions */
+  dimOthers?: boolean;
+  /** half-swing of the gentle yaw sway, in radians (default 0.16) */
+  swayAmp?: number;
+  /** called about 30 times a second with the screen position of each region's centre and of the ghosts */
+  onAnchors?: (a: Anchors) => void;
 }
 
-function Rig({ data, maxDots, positions, neuronById, bus, scope, sway, fit, focusKey }: Props) {
+const REGION_ORDER: BrainRegion[] = ["ingest", "diagnose", "decide", "learn"];
+
+function Rig({ data, maxDots, positions, neuronById, bus, scope, sway, fit, focusKey, focusRegion = null, tintRegions, dimOthers = false, swayAmp = 0.16, onAnchors }: Props) {
   const rig = useRef<Group>(null);
   const pool = useRef<(Mesh | null)[]>([]);
   const { camera, size } = useThree();
@@ -40,9 +54,30 @@ function Rig({ data, maxDots, positions, neuronById, bus, scope, sway, fit, focu
   const dotMaterial = useRef<PointsMaterial>(null);
   const dotPositions = useMemo(() => data.positions.slice(0, Math.min(maxDots, data.positions.length / 3) * 3), [data, maxDots]);
 
+  const geom = useRef<BufferGeometry>(null);
+  const tintKey = (tintRegions ?? []).join(",");
+  // Dot colours: the fog colour everywhere (as before); optionally tinted by region, optionally dimmed outside the tint.
   useEffect(() => {
-    dotMaterial.current?.color.set(readToken("--fog", scope.current, "#8b97b0"));
-  }, [scope]);
+    const base = new Color(readToken("--fog", scope.current, "#8b97b0"));
+    const tinted = new Set(tintKey ? tintKey.split(",") : []);
+    const tint = new Map<string, Color>();
+    for (const r of tinted) tint.set(r, new Color(readToken(`--region-${r}`, scope.current, "#3fc7e0")));
+    const regionOf = data.regions;
+    const dotColors = new Float32Array(dotPositions.length);
+    for (let i = 0; i < dotColors.length / 3; i++) {
+      const r = REGION_ORDER[regionOf[i]] ?? "ingest";
+      const c = tint.get(r) ?? (dimOthers && tinted.size ? base.clone().multiplyScalar(0.45) : base);
+      dotColors[i * 3] = c.r;
+      dotColors[i * 3 + 1] = c.g;
+      dotColors[i * 3 + 2] = c.b;
+    }
+    geom.current?.setAttribute("color", new BufferAttribute(dotColors, 3));
+  }, [data, dotPositions, tintKey, dimOthers, scope]);
+  const lastAnchors = useRef(0);
+  const ghostCentre = useMemo(() => {
+    const g = [...positions].filter(([k]) => k.startsWith("g:")).map(([, p]) => p);
+    return g.length ? new Vector3(g.reduce((a, p) => a + p[0], 0) / g.length, g.reduce((a, p) => a + p[1], 0) / g.length, g.reduce((a, p) => a + p[2], 0) / g.length) : null;
+  }, [positions]);
 
   useEffect(() => {
     const aspect = size.width / Math.max(1, size.height);
@@ -56,14 +91,15 @@ function Rig({ data, maxDots, positions, neuronById, bus, scope, sway, fit, focu
   useFrame(({ clock }, dt) => {
     const g = rig.current;
     if (!g) return;
-    const focus = focusKey ? positions.get(focusKey) : undefined;
+    const regionCentre = focusRegion ? (data.centroids as Record<string, Vector3>)[focusRegion] : undefined;
+    const focus = regionCentre ? ([regionCentre.x, regionCentre.y, regionCentre.z] as V3) : focusKey ? positions.get(focusKey) : undefined;
     // Ease the whole brain so the focused item moves to the centre (about 500 ms; instant with reduced motion).
     const s = focus ? FOCUS_ZOOM : 1;
     const target = focus ? new Vector3(-focus[0] * s, -focus[1] * s, -focus[2] * s * 0.3) : new Vector3();
     const k = reduce ? 1 : 1 - Math.exp(-dt * 8);
     g.scale.setScalar(MathUtils.lerp(g.scale.x, s, k));
     g.position.lerp(target, k);
-    g.rotation.y = sway && !reduce && !focus ? Math.sin(clock.elapsedTime * 0.16) * 0.16 : MathUtils.lerp(g.rotation.y, 0, k);
+    g.rotation.y = sway && !reduce && !focus ? Math.sin(clock.elapsedTime * 0.16) * swayAmp : MathUtils.lerp(g.rotation.y, 0, k);
     g.updateMatrixWorld(true);
 
     const screen = new Map<string, { x: number; y: number }>();
@@ -79,6 +115,17 @@ function Rig({ data, maxDots, positions, neuronById, bus, scope, sway, fit, focu
         el.setAttribute("transform", `translate(${x.toFixed(1)} ${y.toFixed(1)})`);
         el.style.opacity = facing > -0.05 ? "1" : "0.35";
       }
+    }
+    if (onAnchors && clock.elapsedTime - lastAnchors.current > 1 / 30) {
+      lastAnchors.current = clock.elapsedTime;
+      const out: Partial<Anchors> = {};
+      const proj = (v: Vector3) => {
+        tmp.copy(v).applyMatrix4(g.matrixWorld).project(camera);
+        return { x: (tmp.x * 0.5 + 0.5) * size.width, y: (1 - (tmp.y * 0.5 + 0.5)) * size.height };
+      };
+      for (const r of REGION_ORDER) out[r] = proj((data.centroids as Record<string, Vector3>)[r]);
+      if (ghostCentre) out.ghost = proj(ghostCentre);
+      onAnchors(out as Anchors);
     }
     for (const { el, a, b } of bus.lines.values()) {
       const pa = screen.get(a);
@@ -137,10 +184,10 @@ function Rig({ data, maxDots, positions, neuronById, bus, scope, sway, fit, focu
   return (
     <group ref={rig}>
       <points frustumCulled={false}>
-        <bufferGeometry>
+        <bufferGeometry ref={geom}>
           <bufferAttribute attach="attributes-position" args={[dotPositions, 3]} />
         </bufferGeometry>
-        <pointsMaterial ref={dotMaterial} color="#8b97b0" size={0.017} sizeAttenuation transparent opacity={0.8} depthWrite={false} blending={AdditiveBlending} />
+        <pointsMaterial ref={dotMaterial} vertexColors color="#ffffff" size={0.017} sizeAttenuation transparent opacity={0.8} depthWrite={false} blending={AdditiveBlending} />
       </points>
       {Array.from({ length: POOL }, (_, i) => (
         <mesh key={i} ref={(m) => void (pool.current[i] = m)} visible={false}>

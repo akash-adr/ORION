@@ -72,6 +72,8 @@ interface BrainPlayer {
   pulses: Pulse[];
   /** entity id → performance.now() until which it is highlighted */
   highlightUntil: Record<string, number>;
+  /** the event being played right now (until its pulse ends); the Pitch page lights its callouts and loop steps from this */
+  current: BrainEvent | null;
   /** replay progress */
   replay: { total: number; done: number } | null;
   /** id of the first replayed event; a player that mounts after the replay was requested starts from here, not from "now" */
@@ -96,6 +98,7 @@ export const useBrainPlayer = create<BrainPlayer>((set, get) => ({
   caption: null,
   pulses: [],
   highlightUntil: {},
+  current: null,
   replay: null,
   replayFrom: null,
 
@@ -123,8 +126,10 @@ export const useBrainPlayer = create<BrainPlayer>((set, get) => ({
       mode: MODE_OF[e.type] ?? "idle",
       pulses: [...get().pulses.filter((p) => now - p.startedAt < p.duration), pulse],
       highlightUntil: until,
+      current: e,
       replay: replay ? { ...replay, done: Math.min(replay.total, replay.done + 1) } : null,
     });
+    setTimeout(() => get().current?.id === e.id && set({ current: null }), duration);
     return e;
   },
   setMode: (mode) => set({ mode }),

@@ -1,7 +1,8 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { EmptyState, LoadState, Panel } from "@/components/Panel";
 import { inr } from "@/lib/format";
 import { useRecommendations } from "@/lib/queries";
@@ -10,8 +11,14 @@ import DecisionRow from "./DecisionRow";
 
 export default function DecisionLedger() {
   const q = useRecommendations();
-  const [open, setOpen] = useState<string | null>(null);
+  // /command?decision=REC-… (from the Pitch page) opens that row; without it nothing changes
+  const wanted = useSearchParams().get("decision");
+  const [open, setOpen] = useState<string | null>(wanted);
   const [showHandled, setShowHandled] = useState(false);
+  const ready = q.isSuccess;
+  useEffect(() => {
+    if (wanted && ready) document.getElementById(`decision-${wanted}`)?.scrollIntoView({ block: "center" });
+  }, [wanted, ready]);
   const toggle = (id: string) => setOpen((cur) => (cur === id ? null : id));
   return (
     <Panel className="p-0 min-[1200px]:p-0" aria-label="Decisions">

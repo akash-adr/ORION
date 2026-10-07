@@ -43,7 +43,7 @@ export default function DecisionRow({ d, open, onToggle }: Props) {
   const bodyId = `trace-${d.id}`;
 
   return (
-    <li className={cn("border-b border-line last:border-b-0", open && "bg-slate-2/40")}>
+    <li id={`decision-${d.id}`} className={cn("border-b border-line last:border-b-0", open && "bg-slate-2/40")}>
       <div className="grid items-start gap-x-4 gap-y-2 px-4 py-3 min-[1200px]:grid-cols-[minmax(0,1fr)_auto]">
         <button onClick={onToggle} aria-expanded={open} aria-controls={bodyId} className="flex min-w-0 items-start gap-3 rounded-lg text-left">
           <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg border border-line bg-slate-2" aria-hidden>

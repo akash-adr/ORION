@@ -7,7 +7,8 @@ import { useWidth } from "@/components/charts/util";
 import { CLUSTER_ANCHORS, key, layoutGhosts, layoutNeurons, layoutSources, type V3 } from "@/lib/brain/layout";
 import { webglAvailable } from "@/lib/brain/tokens";
 import { newBus, type MapPick } from "@/lib/brain/types";
-import type { BrainSnapshot } from "@/lib/types";
+import type { Anchors } from "@/lib/brain/types";
+import type { BrainRegion, BrainSnapshot } from "@/lib/types";
 import BrainOverlay from "./BrainOverlay";
 
 const Scene3D = dynamic(() => import("./Scene3D"), { ssr: false });
@@ -29,6 +30,19 @@ export interface LiveBrainProps {
   /** overlay key (see lib/brain/layout `key`) the camera should focus */
   focusKey?: string | null;
   sway?: boolean;
+  /* Optional, additive (the Pitch page): every one defaults to the original behaviour. */
+  /** ease the camera toward a region's centre */
+  focusRegion?: BrainRegion | null;
+  /** tint these regions' dots with the region colour */
+  tintRegions?: BrainRegion[];
+  /** fade everything outside the highlighted targets / tinted regions */
+  dimOthers?: boolean;
+  /** neuron ids, or overlay keys for other items, to ring and keep at full strength */
+  highlightTargets?: string[];
+  /** half-swing of the yaw sway in radians (default 0.16) */
+  swayAmp?: number;
+  /** screen positions of the region centres and the ghosts, about 30 times a second */
+  onAnchorsProjected?: (a: Anchors) => void;
   onHover: (p: MapPick | null, at?: { x: number; y: number }) => void;
   onPick: (p: MapPick) => void;
 }
@@ -46,7 +60,7 @@ function useBrainCloud() {
 }
 
 /** The brain as a live map: dot cloud and pulses in WebGL, items in SVG. Without WebGL (or on a phone) it is a flat cluster map. */
-export default function LiveBrain({ snapshot, variant = "map", maxDots, height = 320, focusKey = null, sway = true, onHover, onPick }: LiveBrainProps) {
+export default function LiveBrain({ snapshot, variant = "map", maxDots, height = 320, focusKey = null, sway = true, focusRegion = null, tintRegions, dimOthers = false, highlightTargets, swayAmp, onAnchorsProjected, onHover, onPick }: LiveBrainProps) {
   const [wrap, width] = useWidth<HTMLDivElement>();
   const [bus] = useState(newBus);
   const webgl = useSyncExternalStore(noop, webglAvailable, () => null);
@@ -77,6 +91,7 @@ export default function LiveBrain({ snapshot, variant = "map", maxDots, height =
     return m;
   }, [neuronById, full, snapshot.sources, snapshot.ghosts, snapshot.clusters]);
 
+  const hlKeys = useMemo(() => new Set((highlightTargets ?? []).map((t) => (/^[ncsg]:/.test(t) ? t : key.neuron(t)))), [highlightTargets]);
   const fit = full ? 1.45 : 1;
   // Flat positions: the static map, and the starting point before the 3D projector takes over.
   const placed = useMemo(() => {
@@ -89,8 +104,8 @@ export default function LiveBrain({ snapshot, variant = "map", maxDots, height =
 
   return (
     <div ref={wrap} className="relative w-full select-none" style={{ height }}>
-      {use3d && data && positions && neuronById && <Scene3D data={data} maxDots={maxDots} positions={positions} neuronById={neuronById} bus={bus} scope={wrap} sway={sway} fit={fit} focusKey={focusKey} paused={hidden} />}
-      {width > 0 && positions && <BrainOverlay snapshot={snapshot} variant={variant} placed={placed} bus={bus} width={width} height={height} focusKey={focusKey} onHover={onHover} onPick={onPick} />}
+      {use3d && data && positions && neuronById && <Scene3D data={data} maxDots={maxDots} positions={positions} neuronById={neuronById} bus={bus} scope={wrap} sway={sway} fit={fit} focusKey={focusKey} focusRegion={focusRegion} tintRegions={tintRegions} dimOthers={dimOthers} swayAmp={swayAmp} onAnchors={onAnchorsProjected} paused={hidden} />}
+      {width > 0 && positions && <BrainOverlay snapshot={snapshot} variant={variant} placed={placed} bus={bus} width={width} height={height} focusKey={focusKey} dimOthers={dimOthers} highlightKeys={hlKeys} onHover={onHover} onPick={onPick} />}
     </div>
   );
 }

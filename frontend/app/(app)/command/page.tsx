@@ -6,6 +6,7 @@ import PnlStrip from "@/components/command/PnlStrip";
 import Signals from "@/components/command/Signals";
 import DecisionLedger from "@/components/ledger/DecisionLedger";
 import PageHeader from "@/components/PageHeader";
+import { Suspense } from "react";
 
 export default function CommandPage() {
   return (
@@ -13,7 +14,9 @@ export default function CommandPage() {
       <PageHeader title="Command">What changed, what the engine recommends, and the proof one click away.</PageHeader>
       <PnlStrip />
       <div className="grid items-start gap-5 min-[1200px]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <DecisionLedger />
+        <Suspense fallback={null}>
+          <DecisionLedger />
+        </Suspense>
         <div className="grid gap-5">
           <EngineMap />
           <Signals />

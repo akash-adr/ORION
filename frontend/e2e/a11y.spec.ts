@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
-const ROUTES = ["/command", "/neural", "/diagnosis", "/performance", "/performance?tab=campaigns", "/performance?tab=products", "/data", "/simulator", "/opportunities", "/learning"];
+const ROUTES = ["/pitch", "/command", "/neural", "/diagnosis", "/performance", "/performance?tab=campaigns", "/performance?tab=products", "/data", "/simulator", "/opportunities", "/learning"];
 
 async function settle(page: Page) {
   await page.addInitScript(() => sessionStorage.setItem("mm-intro-shown", "1"));

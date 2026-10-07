@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const ROUTES = ["/command", "/neural", "/diagnosis", "/performance", "/performance?tab=products", "/data", "/simulator", "/opportunities", "/learning"];
+const ROUTES = ["/pitch", "/command", "/neural", "/diagnosis", "/performance", "/performance?tab=products", "/data", "/simulator", "/opportunities", "/learning"];
 
 test("keyboard: every page is reachable by Tab and every focused element shows a focus indicator", async ({ page }) => {
   await page.addInitScript(() => sessionStorage.setItem("mm-intro-shown", "1"));

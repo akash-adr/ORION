@@ -13,3 +13,6 @@ export interface ProjectionBus {
   lines: Map<string, { el: SVGLineElement; a: string; b: string }>;
 }
 export const newBus = (): ProjectionBus => ({ els: new Map(), lines: new Map() });
+
+/** Screen positions (px, relative to the canvas) of each brain region's centre and of the ghost neurons. */
+export type Anchors = Record<"ingest" | "diagnose" | "decide" | "learn" | "ghost", { x: number; y: number }>;

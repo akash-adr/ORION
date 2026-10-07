@@ -1,6 +1,6 @@
 "use client";
 
-import { Brain, ChartLine, History, LayoutDashboard, LoaderCircle, Lightbulb, Microscope, Moon, Play, RotateCcw, ShieldCheck, SlidersHorizontal, Sun, Rewind } from "lucide-react";
+import { Brain, ChartLine, Presentation, History, LayoutDashboard, LoaderCircle, Lightbulb, Microscope, Moon, Play, RotateCcw, ShieldCheck, SlidersHorizontal, Sun, Rewind } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import ConfirmDialog from "./ConfirmDialog";
 
 const NAV = [
+  { href: "/pitch", label: "Pitch", icon: Presentation },
   { href: "/command", label: "Command", icon: LayoutDashboard },
   { href: "/neural", label: "Neural view", icon: Brain },
   { href: "/diagnosis", label: "Diagnosis", icon: Microscope },
