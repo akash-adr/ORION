@@ -49,6 +49,7 @@ TARGET_SPEND_PER_DAY = 300000
 TARGET_TRUE_ROAS = {"amazon": 4.5, "google": 3.1, "meta": 2.1, "tiktok": 1.5, "programmatic": 1.0}
 TARGET_PLATFORM_ROAS = {"meta": 2.6, "google": 3.5}
 TARGET_BLENDED_POAS = 0.93
+BLENDED_POAS_RANGE = (0.88, 0.98)  # tighter band than ±20%, set during calibration
 TARGET_CMP02_ROAS = 1.9
 PROFITABLE = ["CMP-03", "CMP-04", "CMP-05", "CMP-06", "CMP-07", "CMP-13", "CMP-14"]
 EXPECTED_INFLATION = {"meta": 0.22, "google": 0.15, "amazon": 0.0, "tiktok": 0.0, "programmatic": 0.0}
@@ -223,14 +224,14 @@ def check_viral_creative(raw_dir: Path):
 
 
 def check_economics(raw_dir: Path):
-    """Spend, true/platform ROAS, blended POAS within ±20%; profitable set exact; CMP-02 ROAS ≈ 1.9 with POAS < 1."""
+    """Spend, true/platform ROAS within ±20%; blended POAS in 0.88–0.98; profitable set exact; CMP-02 ROAS ≈ 1.9 with POAS < 1."""
     e = economics(raw_dir)
     fails = []
     if not _within(e["spend_per_day"], TARGET_SPEND_PER_DAY):
         fails.append("spend")
     fails += [f"true_roas:{c}" for c, t in TARGET_TRUE_ROAS.items() if not _within(e["true_roas"][c], t)]
     fails += [f"platform_roas:{c}" for c, t in TARGET_PLATFORM_ROAS.items() if not _within(e["platform_roas"][c], t)]
-    if not _within(e["blended_poas"], TARGET_BLENDED_POAS):
+    if not (BLENDED_POAS_RANGE[0] <= e["blended_poas"] <= BLENDED_POAS_RANGE[1]):
         fails.append("blended_poas")
     profitable = sorted(c for c, p in e["campaign_poas"].items() if p > 1)
     if profitable != PROFITABLE:

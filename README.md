@@ -291,8 +291,7 @@ log_brain_event(make_brain_event("anomaly", entity_id="CMP-01", ref_id="AN-001",
 
 _(Team: add assumptions here as they are made.)_
 
-- **M1 calibration (2026-10-07):** every Part 1 ratio was already within the ±20% tolerance with the original knobs, so nothing was tuned. Final knobs: `CVR_SCALE = 1.0`; `CH_CVR` meta 1.00, google 1.15, amazon 1.30, tiktok 0.80, programmatic 0.70; `ELASTICITY = -2.5`. Achieved economics are in the Module 1 section below.
-- **M1 blended POAS is 1.02 (target 0.93, +10%)**: inside tolerance. Lowering `CVR_SCALE` to ~0.91 would hit 0.93 but pushes TikTok true ROAS to ~1.24 and Amazon to ~4.0. Left as is.
+- **M1 calibration (2026-10-07): `CVR_SCALE = 0.9`.** At 1.0 blended POAS was 1.02 (above the 0.88–0.98 band). Set to 0.9 and re-checked: blended POAS 0.91, every channel's true ROAS within ±20% of target, and the profitable list unchanged (CMP-03, 04, 05, 06, 07, 13, 14), so no further 0.02 steps were needed. Other knobs unchanged: `CH_CVR` meta 1.00, google 1.15, amazon 1.30, tiktok 0.80, programmatic 0.70; `ELASTICITY = -2.5`. Achieved economics are in the Module 1 section below.
 - **M1 weekly budget tests** use calendar weeks (Monday–Sunday) for the first 55 days; the last 35 days run at budget so detection baselines are clean.
 
 ## 13. Common mistakes
@@ -353,22 +352,22 @@ Audience base CVR: broad 0.010 · lookalike 0.014 · interest 0.012 · retargeti
 
 | ID | Channel | SKU | Audience | Budget ₹/day | Sat mult | Format | Full-period POAS |
 |---|---|---|---|---|---|---|---|
-| CMP-01 | meta | SKU-A | broad | 50,000 | 0.6 | static | 0.17 |
-| CMP-02 | google | SKU-A | interest | 25,000 | 1.0 | search_text | 0.33 |
-| CMP-03 | meta | SKU-B | lookalike | 40,000 | 1.2 | video | 1.57 |
-| CMP-04 | google | SKU-B | interest | 30,000 | 1.2 | search_text | 1.57 |
-| CMP-05 | amazon | SKU-B | retargeting | 20,000 | 1.0 | sponsored | 2.81 |
-| CMP-06 | google | SKU-C | interest | 8,000 | 4.0 | search_text | 2.98 |
-| CMP-07 | meta | SKU-C | lookalike | 6,000 | 4.0 | video | 2.74 |
-| CMP-08 | meta | SKU-D | broad | 25,000 | 1.0 | carousel | 0.47 |
-| CMP-09 | amazon | SKU-D | interest | 15,000 | 1.0 | sponsored | 0.56 |
-| CMP-10 | tiktok | SKU-J | broad | 15,000 | 1.5 | video | 0.89 |
-| CMP-11 | tiktok | SKU-G | interest | 10,000 | 1.0 | video | 0.27 |
-| CMP-12 | programmatic | SKU-F | broad | 18,000 | 0.8 | display | 0.26 |
-| CMP-13 | amazon | SKU-H | interest | 15,000 | 1.0 | sponsored | 1.53 |
-| CMP-14 | meta | SKU-E | retargeting | 8,000 | 1.5 | carousel | 1.49 |
-| CMP-15 | google | SKU-I | interest | 6,000 | 1.0 | search_text | 0.22 |
-| CMP-16 | programmatic | SKU-A | retargeting | 10,000 | 1.0 | display | 0.30 |
+| CMP-01 | meta | SKU-A | broad | 50,000 | 0.6 | static | 0.15 |
+| CMP-02 | google | SKU-A | interest | 25,000 | 1.0 | search_text | 0.30 |
+| CMP-03 | meta | SKU-B | lookalike | 40,000 | 1.2 | video | 1.45 |
+| CMP-04 | google | SKU-B | interest | 30,000 | 1.2 | search_text | 1.43 |
+| CMP-05 | amazon | SKU-B | retargeting | 20,000 | 1.0 | sponsored | 2.62 |
+| CMP-06 | google | SKU-C | interest | 8,000 | 4.0 | search_text | 2.69 |
+| CMP-07 | meta | SKU-C | lookalike | 6,000 | 4.0 | video | 2.56 |
+| CMP-08 | meta | SKU-D | broad | 25,000 | 1.0 | carousel | 0.37 |
+| CMP-09 | amazon | SKU-D | interest | 15,000 | 1.0 | sponsored | 0.52 |
+| CMP-10 | tiktok | SKU-J | broad | 15,000 | 1.5 | video | 0.90 |
+| CMP-11 | tiktok | SKU-G | interest | 10,000 | 1.0 | video | 0.25 |
+| CMP-12 | programmatic | SKU-F | broad | 18,000 | 0.8 | display | 0.23 |
+| CMP-13 | amazon | SKU-H | interest | 15,000 | 1.0 | sponsored | 1.41 |
+| CMP-14 | meta | SKU-E | retargeting | 8,000 | 1.5 | carousel | 1.25 |
+| CMP-15 | google | SKU-I | interest | 6,000 | 1.0 | search_text | 0.21 |
+| CMP-16 | programmatic | SKU-A | retargeting | 10,000 | 1.0 | display | 0.27 |
 
 ## The 8 planted scenarios
 
@@ -418,17 +417,17 @@ Static structure only; live numbers (spend, POAS, health, size) come from M9's `
 
 ## Achieved economics (calibration)
 
-Knobs: `CVR_SCALE = 1.0`, `CH_CVR` unchanged (no tuning was needed; all within ±20%).
+Knobs: `CVR_SCALE = 0.9` (lowered from 1.0 to bring blended POAS into 0.88–0.98), `CH_CVR` unchanged.
 
 | Metric | Target | Achieved |
 |---|---|---|
-| Average daily spend | ≈ ₹3.0L | ₹2.96L |
-| True ROAS Amazon / Google / Meta / TikTok / Programmatic | 4.5 / 3.1 / 2.1 / 1.5 / 1.0 | 4.39 / 3.07 / 2.22 / 1.36 / 1.01 |
-| Platform ROAS Meta / Google | 2.6 / 3.5 | 2.71 / 3.53 |
-| Attribution inflation Meta / Google | +22% / +15% | +22.1% / +15.0% |
-| Blended POAS | 0.93 | 1.02 |
+| Average daily spend | ≈ ₹3.0L | ₹2.93L |
+| True ROAS Amazon / Google / Meta / TikTok / Programmatic | 4.5 / 3.1 / 2.1 / 1.5 / 1.0 | 3.89 / 2.77 / 1.97 / 1.37 / 0.90 |
+| Platform ROAS Meta / Google | 2.6 / 3.5 | 2.40 / 3.18 |
+| Attribution inflation Meta / Google | +22% / +15% | +22.0% / +14.8% |
+| Blended POAS | 0.93 (accept 0.88–0.98) | 0.91 |
 | Profitable campaigns (POAS > 1) | CMP-03, 04, 05, 06, 07, 13, 14 | exact match |
-| CMP-02 ("ROAS lies") | ROAS ≈ 1.9, POAS < 1 | ROAS 1.85, POAS 0.33 |
+| CMP-02 ("ROAS lies") | ROAS ≈ 1.9, POAS < 1 | ROAS 1.66, POAS 0.30 |
 
 ---
 
