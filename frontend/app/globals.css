@@ -198,7 +198,18 @@ html[data-theme="light"] {
   .tone-muted { color: var(--fog); }
 }
 
+/* The Engine map and neural canvas are always a dark capsule, so the brain reads the same in both themes. */
+.dark-capsule {
+  --ink: #0f1724; --slate: #18233a; --slate-2: #1f2b45; --line: #26324d; --bone: #e8ecf4; --fog: #8b97b0;
+  --synapse: #3fc7e0; --gain: #5bd68a; --loss: #fb7185; --risk: #f2a93b;
+  --gain-fg: #5bd68a; --loss-fg: #fb7185; --risk-fg: #f2a93b; --synapse-fg: #3fc7e0;
+  background: var(--ink); color: var(--bone); border-color: var(--line);
+}
+@keyframes neuron-alert { 0% { transform: scale(1); opacity: 0.9; } 100% { transform: scale(2); opacity: 0; } }
+.neuron-alert { transform-box: fill-box; transform-origin: center; animation: neuron-alert 2.2s ease-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
+  .neuron-alert { animation: none !important; opacity: 0.85; }
   *, *::before, *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;

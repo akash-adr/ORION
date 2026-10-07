@@ -85,7 +85,7 @@ export const useBrainManifest = () => useQuery({ queryKey: keys.brainManifest, q
 /** Everything an action (approve, refresh, objective change…) can change. */
 const AFTER_ACTION = [
   "kpis", "trend", "recommendations", "audit", "learning", "curves", "campaigns", "channels", "sources", "opportunities",
-  "brain-snapshot", "loop-last", "anomalies", "settings",
+  "brain-snapshot", "loop-last", "anomalies", "settings", "optimize",
 ] as const;
 
 export function invalidateAfterAction(qc: QueryClient) {
@@ -99,13 +99,13 @@ export function useUpdateSettings() {
     mutationFn: (body: { autonomy?: Autonomy; objective?: Objective }) => api.updateSettings(body),
     onSuccess: (settings) => {
       qc.setQueryData(keys.settings, settings);
-      return invalidateAfterAction(qc);
+      void invalidateAfterAction(qc);
     },
   });
 }
 export function useRefresh() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: api.refresh, onSuccess: () => invalidateAfterAction(qc) });
+  return useMutation({ mutationFn: api.refresh, onSuccess: () => void invalidateAfterAction(qc) });
 }
 export function useReplay() {
   const qc = useQueryClient();
@@ -113,8 +113,25 @@ export function useReplay() {
 }
 export function useDemoReset() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: api.demoReset, onSuccess: () => invalidateAfterAction(qc) });
+  return useMutation({ mutationFn: api.demoReset, onSuccess: () => void invalidateAfterAction(qc) });
 }
 export function useAsk() {
   return useMutation({ mutationFn: (q: string) => api.ask(q) });
 }
+
+/** Approve / reject / roll back. Callers show the toast; every outcome (even {ok:false}) refreshes the engine's views. */
+function useDecisionMutation<T>(fn: (id: string) => Promise<T>) {
+  const qc = useQueryClient();
+  // not awaited: the row that fired the action may unmount once the lists refresh, and its toast callback must still run
+  return useMutation({ mutationFn: fn, onSettled: () => void invalidateAfterAction(qc) });
+}
+export const useApprove = () => useDecisionMutation(api.approve);
+export const useReject = () => useDecisionMutation(api.reject);
+export const useRollback = () => useDecisionMutation(api.rollback);
+
+/** The optimizer's plan for the current objective (used for each campaign's bound reasons). */
+export const useOptimizeKey = () => {
+  const { data: settings } = useSettings();
+  const objective = settings?.objective;
+  return useQuery({ queryKey: ["optimize", objective ?? ""], queryFn: () => api.optimize({ objective }), enabled: !!objective, staleTime: 60 * SECOND });
+};

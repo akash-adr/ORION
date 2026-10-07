@@ -4,7 +4,8 @@ import { Brain, ChartLine, History, LayoutDashboard, LoaderCircle, Lightbulb, Mi
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { useDemoReset, useRefresh, useReplay, useSettings } from "@/lib/queries";
+import { useDemoReset, useReplay, useSettings } from "@/lib/queries";
+import { useRunLoop } from "./useRunLoop";
 import { ApiError } from "@/lib/api";
 import { useUiStore } from "@/lib/ui-store";
 import { cn } from "@/lib/utils";
@@ -31,20 +32,10 @@ export default function Rail() {
   const theme = useUiStore((s) => s.theme);
   const toggleTheme = useUiStore((s) => s.toggleTheme);
   const { data: settings } = useSettings();
-  const refresh = useRefresh();
+  const { run: runLoop, running } = useRunLoop();
   const replay = useReplay();
   const reset = useDemoReset();
   const [confirmReset, setConfirmReset] = useState(false);
-
-  const runLoop = () =>
-    refresh.mutate(undefined, {
-      onSuccess: (r) => {
-        const failed = Object.entries(r.steps).filter(([, s]) => !s.ok).map(([k]) => k);
-        if (failed.length) toast("risk", `Ran the loop · ${failed.join(", ")} failed`, "The other steps finished. Check the engine log, then run the loop again.");
-        else toast("gain", `Ran the loop · ${r.events_logged} brain events`, `${r.outcomes_measured} outcomes measured in ${(r.duration_ms / 1000).toFixed(1)} s.`);
-      },
-      onError: (e) => toast("loss", "The loop did not run", `${failure(e)} Start the backend and try again.`),
-    });
 
   const startReplay = () =>
     replay.mutate(undefined, {
@@ -102,9 +93,9 @@ export default function Rail() {
       </nav>
 
       <div className="flex shrink-0 gap-1 border-line max-[999px]:ml-auto min-[1000px]:flex-col min-[1000px]:border-t min-[1000px]:pt-3">
-        <button onClick={runLoop} disabled={refresh.isPending} className={cn(btn, "bg-synapse !text-primary-foreground hover:!bg-synapse/85")} title="Run the loop now">
-          {refresh.isPending ? <LoaderCircle className="size-[18px] animate-spin" aria-hidden /> : <Play className="size-[18px]" aria-hidden />}
-          <span className={lab}>{refresh.isPending ? "Running the loop" : "Run the loop now"}</span>
+        <button onClick={runLoop} disabled={running} className={cn(btn, "bg-synapse !text-primary-foreground hover:!bg-synapse/85")} title="Run the loop now">
+          {running ? <LoaderCircle className="size-[18px] animate-spin" aria-hidden /> : <Play className="size-[18px]" aria-hidden />}
+          <span className={lab}>{running ? "Running the loop" : "Run the loop now"}</span>
         </button>
         <button onClick={startReplay} disabled={replay.isPending} className={btn} title="Replay the last 7 days">
           <Rewind className="size-[18px]" aria-hidden />

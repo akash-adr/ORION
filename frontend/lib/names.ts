@@ -125,3 +125,32 @@ export function stageDisplay(stage: string): string {
   };
   return map[stage] ?? stage.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 }
+
+export interface DecisionTitleParts {
+  /** the verb phrase, e.g. "Refresh creative & trim budget" */
+  action: string;
+  /** what it applies to when it is not a campaign, e.g. "cut ads on Running Pro by 60%" */
+  subject: string | null;
+  /** set when the rest of the title is "Channel · Product · audience" */
+  campaign: CampaignParts | null;
+}
+
+/** "Refresh creative & trim budget · Meta · Summer Sneakers · broad" → action + campaign parts (no dotted strings in the UI). */
+export function parseDecisionTitle(title: string): DecisionTitleParts {
+  const parts = title.split("·").map((s) => s.trim()).filter(Boolean);
+  const action = parts[0] ?? title;
+  const rest = parts.slice(1);
+  if (rest.length >= 3 && rest[0].toLowerCase() in CHANNEL_NAMES) return { action, subject: null, campaign: parseCampaignName(rest.join(" · ")) };
+  return { action, subject: rest.length ? rest.join(", ") : null, campaign: null };
+}
+
+/** What a z-score means in plain words. */
+export function zMeaning(z: number | null | undefined): string {
+  if (z === null || z === undefined || !Number.isFinite(z)) return "no statistical signal";
+  const a = Math.abs(z);
+  if (a === 0) return "not a statistical signal; found by comparing sources";
+  if (a >= 6) return "far outside normal variation";
+  if (a >= 4) return "well outside normal variation";
+  if (a >= 2.5) return "outside normal variation";
+  return "a weak statistical signal";
+}

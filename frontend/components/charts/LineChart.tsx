@@ -111,7 +111,7 @@ export default function LineChart({ x, series, height = 240, format = inr, xForm
               <g key={i}>
                 <rect x={xs[a]} y={M.t} width={Math.max(1, xs[z] - xs[a])} height={ih} fill="var(--synapse)" opacity="0.08" />
                 {b.label && (
-                  <text x={xs[a] + 6} y={M.t + 12} fontSize="12" fill="var(--fog)">
+                  <text x={xs[a] + 6} y={M.t + ih - 8} fontSize="12" fill="var(--fog)">
                     {b.label}
                   </text>
                 )}
@@ -135,7 +135,7 @@ export default function LineChart({ x, series, height = 240, format = inr, xForm
           {thresholds.map((t, i) => (
             <g key={i}>
               <line x1={M.l} x2={M.l + iw} y1={sy(t.value)} y2={sy(t.value)} stroke={t.color ?? "var(--risk)"} strokeWidth="1" strokeDasharray="5 4" />
-              <text x={M.l + iw - 4} y={sy(t.value) - 5} textAnchor="end" fontSize="12" fill={t.color ?? "var(--risk-fg)"}>
+              <text x={M.l + 6} y={sy(t.value) - 5} textAnchor="start" fontSize="12" fill={t.color ?? "var(--risk-fg)"}>
                 {t.label}
               </text>
             </g>

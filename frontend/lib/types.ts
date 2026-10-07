@@ -237,7 +237,8 @@ export interface RootCause {
   /** ₹/day change in the headline metric (the waterfall's net). */
   total_change: number;
   factors: Factor[];
-  funnel: (FunnelStage | CampaignMove)[];
+  /** null for attribution anomalies (no factors and no funnel; they are explained by the reconciliation) */
+  funnel: (FunnelStage | CampaignMove)[] | null;
   narrative: string;
 }
 
