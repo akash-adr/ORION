@@ -257,8 +257,30 @@ def _channel_name(channel: str) -> str:
     return CHANNEL_DISPLAY.get(channel, channel.title())
 
 
+def _signed_pct(x: float) -> str:
+    return f"{'+' if x >= 0 else MINUS}{abs(x) * 100:.0f}%"
+
+
+def causal_sentence(c: dict) -> str:
+    """The synthetic-control sentence appended to a price-driven conversion_drop narrative."""
+    r = c["result"]
+    return (f"Causal check (synthetic control): units ≈ {_signed_pct(c['units_change_pct'])} vs what would have "
+            f"happened anyway; net margin effect {m.format_inr(r.effect_per_day)}/day (95% CI "
+            f"{m.format_inr(r.ci_low)} to {m.format_inr(r.ci_high)} over the {c['n_post']} days).")
+
+
+def lead_sentence(rc: RootCause, kind: str) -> str:
+    """The first narrative sentence (headline + largest driver), used as the brain event message."""
+    text = rc.narrative
+    if "Largest driver:" in text and "/day)." in text:
+        return text[: text.index("/day).", text.index("Largest driver:")) + len("/day).")]
+    if kind == "attribution_inflation":
+        return text
+    return text.split(". ")[0].rstrip(".") + "."
+
+
 def _narrative(a: Anomaly, factors: list[Factor], total: float, label_of: dict[str, str], t: Tables,
-               funnel: list[dict]) -> str:
+               funnel: list[dict], causal: dict | None = None) -> str:
     """Template narrative: general → offset → kind-specific → knock-on. Always consistent with the numbers."""
     d, s = a.detail, []
     by_name = {f.name: f for f in factors}
@@ -324,6 +346,8 @@ def _narrative(a: Anomaly, factors: list[Factor], total: float, label_of: dict[s
             s.append(sent)
             if d.get("event_id"):
                 s.append("See causal analysis for proof.")
+                if causal and d["event_id"] in causal:
+                    s.append(causal_sentence(causal[d["event_id"]]))
         else:
             s.append(f"Site conversion fell {_pct(a.change_pct)} with no price change.")
 
@@ -344,7 +368,7 @@ def _windows(a: Anomaly) -> tuple[tuple[str, str], tuple[str, str]]:
     return (w["recent_start"], w["recent_end"]), (w["baseline_start"], w["baseline_end"])
 
 
-def _diagnose(a: Anomaly, t: Tables, label_of: dict[str, str]) -> RootCause:
+def _diagnose(a: Anomaly, t: Tables, label_of: dict[str, str], causal: dict | None = None) -> RootCause:
     if a.kind == "attribution_inflation":  # a data issue: narrative only, no window to decompose
         return RootCause(a.id, a.entity_id, 0.0, [], [], _narrative(a, [], 0.0, label_of, t, []))
     recent_win, base_win = _windows(a)
@@ -361,26 +385,42 @@ def _diagnose(a: Anomaly, t: Tables, label_of: dict[str, str]) -> RootCause:
         d = t.fact[t.fact["campaign_id"] == a.entity_id]
         factors, total, _, _ = _decompose_campaign_frame(_window_frame(d, *recent_win), _window_frame(d, *base_win), nr, nb)
         funnel = _funnel(d["sku_id"].iloc[0], t.sku, recent_win, base_win)
-    return RootCause(a.id, a.entity_id, total, factors, funnel, _narrative(a, factors, total, label_of, t, funnel))
+    return RootCause(a.id, a.entity_id, total, factors, funnel,
+                     _narrative(a, factors, total, label_of, t, funnel, causal))
 
 
 def _label_lookup(anomalies: list[Anomaly]) -> dict[str, str]:
     return {f"{a.kind}:{a.entity_id}": a.label for a in anomalies}
 
 
-def diagnose(anomaly: Anomaly, anomalies: list[Anomaly] | None = None, tables: Tables | None = None) -> RootCause:
-    """Explain one anomaly. `anomalies` (the full list) lets knock-on narratives name their cause."""
-    return _diagnose(anomaly, tables or Tables(), _label_lookup(anomalies or [anomaly]))
+def causal_event_id(anomaly: Anomaly, causal: dict | None) -> str | None:
+    """The event id of the causal analysis linked to an anomaly (a price-driven conversion_drop), else None."""
+    eid = anomaly.detail.get("event_id") if anomaly.kind == "conversion_drop" else None
+    return eid if eid and causal and eid in causal else None
 
 
-def diagnose_all(anomalies: list[Anomaly] | None = None) -> list[RootCause]:
-    """Diagnose every anomaly (ranked order). With None, run M3 detect_all() first."""
+def diagnose(anomaly: Anomaly, anomalies: list[Anomaly] | None = None, tables: Tables | None = None,
+             causal: dict | None = None) -> RootCause:
+    """Explain one anomaly. `anomalies` (the full list) lets knock-on narratives name their cause; `causal`
+    ({event_id: event_effect_details}) appends the synthetic-control sentence to a price-driven conversion_drop."""
+    return _diagnose(anomaly, tables or Tables(), _label_lookup(anomalies or [anomaly]), causal)
+
+
+def diagnose_all(anomalies: list[Anomaly] | None = None, causal: dict | None = None) -> list[RootCause]:
+    """Diagnose every anomaly (ranked order). With None, run M3 detect_all() first.
+
+    `causal` ({event_id: details}); when omitted it is computed with M4b for every price-driven conversion_drop.
+    """
     if anomalies is None:
         from backend.detection.detectors import detect_all  # local: keeps M4 importable without M3 data
 
         anomalies = detect_all()
+    if causal is None:
+        from backend.diagnosis.causal import compute_causal  # local: M4b depends on M3, not the other way round
+
+        causal = compute_causal(anomalies)
     t, labels = Tables(), _label_lookup(anomalies)
-    return [_diagnose(a, t, labels) for a in anomalies]
+    return [_diagnose(a, t, labels, causal) for a in anomalies]
 
 
 # ---------------------------------------------------------------------------
@@ -398,13 +438,8 @@ def _funnel_insight(rc: RootCause) -> str:
     return f"biggest drop at {drop['stage']} ({drop['baseline_rate']:.1%} → {drop['recent_rate']:.1%}, {drop['change_pct']:+.0%})"
 
 
-def main() -> None:
-    from backend.detection.detectors import detect_all
-
-    start = time.perf_counter()
-    anomalies = detect_all()
-    results = diagnose_all(anomalies)
-    elapsed = time.perf_counter() - start
+def print_report(anomalies: list[Anomaly], results: list[RootCause], elapsed: float) -> bool:
+    """Print every diagnosis (factors, sum check, funnel insight, narrative). Returns True if all sums hold."""
     all_ok = True
     for a, rc in zip(anomalies, results):
         ok = rc.check_sum(tol=1.0)
@@ -418,6 +453,16 @@ def main() -> None:
         print(f"    funnel: {_funnel_insight(rc)}")
         print(f"    {rc.narrative}")
     print(f"\nM4 OK · {len(results)} diagnoses · {'all waterfalls sum exactly' if all_ok else 'SUM CHECK FAILED'} · {elapsed:.1f}s")
+    return all_ok
+
+
+def main() -> None:
+    from backend.detection.detectors import detect_all
+
+    start = time.perf_counter()
+    anomalies = detect_all()
+    results = diagnose_all(anomalies)
+    print_report(anomalies, results, time.perf_counter() - start)
 
 
 if __name__ == "__main__":

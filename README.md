@@ -289,6 +289,7 @@ log_brain_event(make_brain_event("anomaly", entity_id="CMP-01", ref_id="AN-001",
 | 2026-10-07 | Appended `RECON_GAP_THRESHOLD = 0.10`, `REFRESH_MINUTES = 5`, `FRESHNESS_WARN_MINUTES = 15` to `config.py` | M2 flags reconciliation gaps (S5); the demo loop and stale-data badge need shared intervals |
 | 2026-10-07 | Added `neuron_metrics`, `source_status`, `data_quality` to `db.TABLE_COLUMNS` | The Neural Brain needs live per-neuron numbers and per-stream status; data-quality results must be stored and shown |
 | 2026-10-07 | Appended `FATIGUE_FREQ_UP`, `FATIGUE_CTR_DOWN`, `CPC_SPIKE_MIN`, `SKU_RECENT_DAYS`, `SKU_BASELINE_DAYS`, `PROFIT_BASE_FLOOR`, `MAD_SCALE` to `config.py` | M3 detectors need shared, documented thresholds (fatigue, CPC spike, 14/28-day site-conversion windows, robust-z scaling) so no module hard-codes them |
+| 2026-10-07 | Appended `CAUSAL_CHART_DAYS`, `CAUSAL_CI_Z`, `CAUSAL_MIN_PRE_DAYS` to `config.py`; added `diagnoses`, `causal_results` to `db.TABLE_COLUMNS`; added `active_diagnoses` to `default_state()` (old state files gain it via `load_state`) | M4 persists root-cause waterfalls and M4b persists synthetic-control results; diagnosis pulses are deduplicated against the last pulse's signature |
 | 2026-10-07 | Appended `CHANNEL_DISPLAY` to `config.py` (meta → "Meta", tiktok → "TikTok", …) | `str.title()` produced "Tiktok" in campaign names and alert labels; every label in M1/M2/M3 now uses one shared display map |
 | 2026-10-07 | Added `anomalies`, `brain_alerts` to `db.TABLE_COLUMNS`; added `active_anomalies`, `detection_quality` to `default_state()` (old state files gain them via `load_state`) | M3 persists detection results, maps them onto brain targets (neuron / cluster / source), emits Diagnose pulses only for new or worsening anomalies, and stores the ground-truth evaluation for the "7/7 detected" badge |
 
@@ -300,6 +301,8 @@ _(Team: add assumptions here as they are made.)_
 - **M2 validation, CMP-02 band:** the M2 spec asked for CMP-02 full-period true ROAS 1.85–1.95, which assumed `CVR_SCALE = 1.0`. After recalibrating to 0.9 it is 1.66, so `backend/ingest/validate.py` uses M1's ±20% band around 1.9 (1.52–2.28) while still requiring POAS < 1.
 - **M2 last-7-day headline numbers** (POAS 0.83, true ROAS 2.05, platform ROAS 2.27) sit below the spec's estimates (≈ 0.93 / 2.3 / 2.55) for the same reason, plus S1 fatigue and the S3 Google CPC spike falling in that window. All are within the validation tolerances.
 - **M2 `change_pct` sign:** measured against |previous| (still via M0 `change_pct`), so a deepening loss reads as negative. With a plain recent ÷ previous − 1, CMP-01 (−₹43.0k → −₹45.6k/day, a worse loss) would show as +6%.
+- **M4b CI scale:** `CausalResult.ci_low` / `ci_high` are the 95% interval on `total_effect` (₹ over the post-period), per the M4b formula, although M0's schema comment says ₹/day. The validation check "ci_low < effect < ci_high" therefore compares against `total_effect`.
+- **M4b EV-2 result:** units −21.8% vs counterfactual (the spec expected ≈ −25%; the price elasticity alone implies −29.5%), net margin +₹2.1k/day with a 95% interval that includes zero. Reported, not tuned.
 - **M1 weekly budget tests** use calendar weeks (Monday–Sunday) for the first 55 days; the last 35 days run at budget so detection baselines are clean.
 
 ## 13. Common mistakes
@@ -689,6 +692,133 @@ Targets hit by several anomalies merge: `anomaly_ids` list, top = largest |₹ i
 **Diagnose pulses**: one `anomaly` brain event (region `diagnose`, path `ingest → diagnose`; payload includes `related`, the cause keys, for cause → knock-on pulses) per alert, but **only when the key is new, the severity got worse, or |₹ impact| grew by more than 25%** since last seen. A first run on fresh state logs one per alert; an immediate re-run logs none. Keys that stop firing are dropped from `active_anomalies` and listed as `resolved` (no event for resolved in this module). `emit_brain_events=False` logs nothing and leaves state untouched.
 
 **`detection_quality`** (in `state.json`) stores the answer-key evaluation and powers the "7/7 detected" badge.
+
+---
+
+# Module 4 — Root-Cause Diagnosis (+ M4b Causal)
+
+> **Pitch line:** "We don't just say profit fell — we say it fell ₹25.7k a day, 95% because Google auctions got expensive. Every rupee is attributed, the bars add up exactly, and for price changes we prove cause with a counterfactual."
+
+M4 is the "thinking" step inside the Neural Brain's **Diagnose lobe**. For every M3 anomaly it explains *why*: it splits the ₹/day change into exact causes (the waterfall), drills down to the responsible campaign or funnel step and writes a plain-English narrative. M4b adds causal proof for price changes using a synthetic control.
+
+```bash
+python -m backend.diagnosis.runner                    # diagnose, persist, pulse the brain, print everything
+python -m backend.diagnosis.runner --no-brain-events  # same, without touching state.json
+python -m backend.diagnosis.decompose                 # just the decomposition table (no persistence)
+python -m backend.diagnosis.validate                  # 16-point PASS/FAIL table (never touches the real state.json)
+python -m pytest -q                                   # M0–M4 tests (temp folders only)
+```
+
+## The metric tree
+
+Each anomaly is analysed over **its own** `detail["window"]`, so M4 explains exactly what M3 detected. All values are **daily averages** per window and ratios are Σnumerator ÷ Σdenominator, so impacts are ₹ per day.
+
+```
+campaign / channel                                   SKU
+  Orders = Spend ÷ CPM × 1000 × CTR × CVR             Units = Sessions × Site CVR
+  GM     = Orders × Unit margin                        GM    = Units × Unit margin
+  Profit = GM − Spend
+  drivers: Spend, CPM, CTR, CVR, Unit margin           drivers: Sessions, Site CVR, Unit margin
+```
+
+## Why LMDI, not subtraction
+
+The drivers **multiply**. If CTR falls and CVR rises in the same window, "CTR change × old everything else" plus "CVR change × old everything else" does not add up to the real change: the cross terms belong to nobody, and the leftover ends up as an "other" bar. **LMDI** (Log-Mean Divisia Index) assigns every rupee exactly:
+
+```
+L = (GM₁ − GM₀) ÷ (ln GM₁ − ln GM₀)                 (the logarithmic mean of GM₀ and GM₁)
+contribution[d] = L × sign[d] × ln(driver₁[d] ÷ driver₀[d])        sign(CPM) = −1, all others +1
+Σ contributions = GM₁ − GM₀     exactly
+```
+
+- **Budget factor.** Spend is both a driver of volume and a cost, so `Budget change = contribution(Spend) − (spend₁ − spend₀)`: the volume the extra money bought minus the money itself. Then Σ factors = (GM₁ − spend₁) − (GM₀ − spend₀) = Δprofit/day exactly. SKU level has no ad-spend term: Σ factors = ΔGM.
+- **Fallback.** If GM ≤ 0 in either window the log is undefined, so ΔGM is split equally across the drivers. A driver ≤ 0 contributes 0 (nothing is re-distributed); if the sum check (±₹0.01) then fails, the equal split is used.
+- **Rounding.** Impacts are rounded to 2 dp after the check and any residue (≤ ₹0.05) goes onto the largest factor, so the rounded bars sum exactly to the rounded total. There is never an "other / unexplained" bar. `Factor.pct = |impact| ÷ Σ|impacts|`.
+
+## Fixed factor names and colours (UI contract)
+
+| Level | Factor (exact string) | Suggested colour |
+|---|---|---|
+| campaign / channel | `Budget change` | slate |
+| campaign / channel | `Auction cost (CPM/CPC)` | amber |
+| campaign / channel | `Click-through / creative` | violet |
+| campaign / channel | `Conversion rate` | blue |
+| campaign / channel & SKU | `Price / unit margin` | teal |
+| SKU | `Traffic (sessions)` | indigo |
+| SKU | `Site conversion rate` | blue |
+
+The names live in `FACTOR_NAMES` and the display order in `FACTOR_ORDER` (`backend/diagnosis/decompose.py`). Factors are always returned in that fixed order.
+
+## Drill-down and funnel per anomaly kind
+
+| Anomaly | Decomposition | `funnel` field |
+|---|---|---|
+| creative_fatigue, metric_shift, positive_spike (campaign) | campaign waterfall on `fact_daily` | the campaign's SKU site funnel: pdp_views → add_to_cart → checkout → purchases, each with baseline vs recent rate; the step with the biggest fall is `is_biggest_drop` |
+| cpc_spike (channel) | Σ across the channel's campaigns | per-campaign drill-down (baseline / recent profit, change, top factor), **worst first** |
+| stockout_risk, conversion_drop (SKU) | SKU waterfall on `sku_daily` | the SKU site funnel (4 steps, one biggest drop) |
+| attribution_inflation | none (a data issue): `total_change` 0, no factors | none; narrative only |
+
+## Narrative rules (template-based, no LLM)
+
+Sentences in order: **general** ("[label]: daily profit fell/rose by ₹X. Largest driver: [factor] (Y% of the movement, ₹Z/day)." The driver is always the largest factor *in the same direction as the total*, and SKU level says "gross margin") → **offset** (an opposite factor above 20% of the main one: "Partly offset by …") → **kind-specific** → **knock-on** ("Linked to: …").
+
+| Kind | Example from this run |
+|---|---|
+| creative_fatigue | "…Frequency rose from 1.9 to 3.7 and click-through fell 36% — the audience has seen this creative too often." |
+| positive_spike | "…A new creative (CR-10b) launched in this window and lifted click-through by 118%." |
+| cpc_spike | "…Clicks got 56% more expensive across 4 Google campaigns; hardest hit: Google · Running Pro · interest. Likely cause: Competitor sale drives Google auction prices up (EV-3)." |
+| stockout_risk | "…Only 5.0 days of stock left with no inbound shipment, while ₹89.3k/day of ads still drive demand — ₹1.56L/day of margin is at risk." |
+| conversion_drop | "…Site conversion fell 18% after the price moved from ₹1,999 to ₹2,299 (EV-2). The price rise traded customers for margin: volume lost ₹7.8k/day, margin gained ₹9.2k/day. See causal analysis for proof. Causal check (synthetic control): units ≈ −22% …" |
+| attribution_inflation | "Meta reports 22% more conversions than the store recorded. Platform ROAS 2.40 vs true 1.97 — optimising on platform numbers would over-fund this channel." |
+| knock-on | "Linked to: Positive spike · TikTok · Gym Flex · broad. The viral traffic is colder and converts worse — scale carefully." |
+
+## Output of this run
+
+| Alert | Total ₹/day | Main driver (share of movement) | Insight |
+|---|---|---|---|
+| Stockout risk · Running Pro | −₹24.3k (GM) | Traffic (sessions) 91% | 5.0 days of cover, no inbound; ₹1.56L/day of margin at risk |
+| CPC spike · Google | −₹25.7k | Auction cost (CPM/CPC) 95% | competitor sale (EV-3); Google · Running Pro · interest hit hardest (−₹15.2k) |
+| Positive spike · TikTok · Gym Flex | +₹13.7k | Click-through / creative 88% | new UGC creative CR-10b lifted CTR 118% |
+| Conversion drop · Casual X | +₹1.5k (GM) | Price / unit margin 54% | site CVR −₹5.9k, margin +₹9.2k: customers traded for margin |
+| Conversion drop · Gym Flex | +₹7.1k (GM) | Traffic (sessions) 70% | viral traffic converts worse (linked to the CMP-10 spike) |
+| Profit drop · Google · Summer Sneakers | −₹3.1k | Auction cost (CPM/CPC) 89% | linked to the Google CPC spike |
+| Creative fatigue · Meta · Summer Sneakers | −₹2.8k | Click-through / creative 92% | frequency 1.9 → 3.7, CTR −36% |
+| Attribution inflation · Meta / Google | ₹0 | narrative only | platform ROAS 2.40 vs true 1.97 (Meta) · 3.18 vs 2.77 (Google) |
+
+Every waterfall sums to its total (largest rounding gap ≈ 4×10⁻¹²); the whole run, including detection, takes about 0.1 s.
+
+## M4b: causal analysis by synthetic control
+
+A before/after comparison cannot tell a price change from everything else that moved that week. So M4b builds the SKU's **counterfactual**: its site conversion *without* the price change, predicted from SKUs the event did not touch.
+
+1. **Event and prices**: the date and treated SKU come from `events`; old and new price from `sku_daily.unit_price` (the day before vs the event date).
+2. **Daily site CVR** = units ÷ max(sessions, 1) for every SKU.
+3. **Controls** = every SKU except the treated one and any **disturbed** SKU. Disturbed is derived by rule (never hard-coded IDs) from the active M3 anomalies: an active `stockout_risk`, its own `conversion_drop`, or a campaign with an active `positive_spike`. Here that excludes SKU-B (stockout) and SKU-J (viral campaign CMP-10), leaving seven controls.
+4. **Fit** on all pre-event days (≥ 21 required) with `scipy.optimize.nnls` on `[control CVRs, 1]` → treated CVR. **Why NNLS**: weights must be non-negative, so the synthetic SKU is a plain blend of real ones. Negative weights would "short" a control to chase noise, extrapolate wildly after the event and could not be explained to a brand manager.
+5. **Counterfactual rate** after the event = `[controls_post, 1] @ w`, clipped at 0.
+6. **Margin**: counterfactual units (actual sessions × counterfactual rate) are valued at the **old** price, actual units at the **new** price. `effect_per_day = mean(actual GM − counterfactual GM)`; `total_effect` is the sum over the post-period.
+7. **95% interval**: `half_width = 1.96 × SD(pre-period fit residual) × mean post sessions × new unit margin × √n_post`, giving `ci = total_effect ± half_width`. **`ci_low` / `ci_high` bound `total_effect` (₹ over the post-period), not ₹/day**; this follows the M4b specification literally, while M0's `CausalResult` comment says ₹/day, so consumers must compare the interval with `total_effect`.
+8. `units_change_pct = Σ actual units ÷ Σ counterfactual units − 1`; `series` = last 45 days of actual vs counterfactual CVR with an `is_post` flag (the fitted value before the event); `pre_fit_rmse` measures how closely the fit tracks.
+
+**EV-2 result (Casual X price ₹1,999 → ₹2,299):**
+
+| Measure | Value |
+|---|---|
+| Units vs counterfactual | **−21.8%** over the 14 post days |
+| Net margin effect | **+₹2.1k/day** (+₹29.3k total) |
+| 95% CI on the total | −₹3.3k to +₹62.0k (**includes zero**) |
+| Controls (non-zero weights) | SKU-A 0.314 · SKU-G 0.263 · SKU-F 0.188 · SKU-I 0.088 · SKU-H 0.006 · SKU-C 0.0005 (SKU-E 0, intercept 0) |
+| Excluded | SKU-B (active stockout_risk), SKU-J (campaign CMP-10 has an active positive_spike) |
+| Pre-period fit | RMSE 0.00195 = 12% of mean CVR |
+
+**Business insight:** the price rise cost Casual X roughly a fifth of its customers, and the margin it gained per unit roughly cancelled that: net effect is statistically indistinguishable from zero. So the rise has not demonstrably earned anything. Review the price, or trim Casual X ads (its two campaigns return 0.37 and 0.52 on every ₹1 of spend in gross margin).
+
+## Neural Brain integration
+
+- **Diagnosis pulses** (type `diagnosis`, region `diagnose`, path `diagnose`): one per anomaly, in ranked order, with the first narrative sentence as the message and `{anomaly_key, top_factor, top_factor_pct, total_change, factors: [{name, impact}], related, causal_event_id, has_waterfall}` as the payload. The UI draws the **waterfall bars** from `factors`, pulses from cause to knock-on via `related` (Google cluster → CMP-02, CMP-10 → SKU-J) and opens the **causal chart** when `causal_event_id` is set.
+- **Causal proof pulse**: one extra `diagnosis` event on the treated SKU (`ref_id` = the event id, severity medium): "Causal proof · Casual X price rise: units −22% vs counterfactual, net margin ₹2.1k/day (95% CI includes zero)", with `{event_id, effect_per_day, total_effect, ci_low, ci_high, units_change_pct}`. The message says "includes zero" only when it does.
+- **Dedupe**: a diagnosis pulses only when its key is new in `state["active_diagnoses"]` or its signature (`top_factor|total_change rounded to ₹100`) changed; the causal pulse uses the key `causal:<event_id>`. Keys that stop appearing are dropped. `emit_brain_events=False` logs nothing and leaves state untouched.
+- **Tables**: `diagnoses` (one row per anomaly, with factors / funnel / related as JSON and `causal_event_id`) and `causal_results` (effect, interval, controls, weights and the chart series).
 
 ---
 

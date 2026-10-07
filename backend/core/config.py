@@ -189,3 +189,10 @@ MAD_SCALE = 1.4826  # MAD → standard-deviation equivalent
 # 2.11 Display names (added for M1–M3 labels, additive)
 # ---------------------------------------------------------------------------
 CHANNEL_DISPLAY = {"meta": "Meta", "google": "Google", "amazon": "Amazon", "tiktok": "TikTok", "programmatic": "Programmatic"}  # human-readable channel names for every label (never str.title(): it yields "Tiktok")
+
+# ---------------------------------------------------------------------------
+# 2.12 Causal analysis (added for M4b, additive)
+# ---------------------------------------------------------------------------
+CAUSAL_CHART_DAYS = 45  # days of actual vs counterfactual returned for the chart
+CAUSAL_CI_Z = 1.96  # 95% interval
+CAUSAL_MIN_PRE_DAYS = 21  # minimum pre-period days to fit weights

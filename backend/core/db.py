@@ -77,6 +77,16 @@ TABLE_COLUMNS: dict[str, list[str]] = {
         "target_id", "target_type", "anomaly_ids", "top_kind", "top_severity", "direction", "profit_impact",
         "stock_locked", "message",
     ],
+    # --- added for M4 / M4b (additive): root-cause diagnoses and causal (counterfactual) results ---
+    "diagnoses": [  # one row per anomaly
+        "anomaly_key", "anomaly_id", "entity_type", "entity_id", "kind", "total_change", "top_factor",
+        "top_factor_pct", "factors_json", "funnel_json", "narrative", "related_json", "causal_event_id",
+        "diagnosed_at",
+    ],
+    "causal_results": [  # one row per computed event
+        "event_id", "description", "treated_sku", "method", "effect_per_day", "total_effect", "ci_low", "ci_high",
+        "units_change_pct", "pre_fit_rmse", "controls_json", "weights_json", "series_json", "computed_at",
+    ],
 }
 
 # Raw files written by M1 into config.RAW_DIR
@@ -188,6 +198,7 @@ def default_state() -> dict:
         "brain_event_seq": 0,
         "active_anomalies": {},  # stable key → {id, kind, entity_id, severity, first_seen, last_seen, profit_impact}
         "detection_quality": {},  # last evaluation against ground truth
+        "active_diagnoses": {},  # stable anomaly key → signature of the last diagnosis pulse
     }
 
 
