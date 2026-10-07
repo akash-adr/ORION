@@ -289,6 +289,7 @@ log_brain_event(make_brain_event("anomaly", entity_id="CMP-01", ref_id="AN-001",
 | 2026-10-07 | Appended `RECON_GAP_THRESHOLD = 0.10`, `REFRESH_MINUTES = 5`, `FRESHNESS_WARN_MINUTES = 15` to `config.py` | M2 flags reconciliation gaps (S5); the demo loop and stale-data badge need shared intervals |
 | 2026-10-07 | Added `neuron_metrics`, `source_status`, `data_quality` to `db.TABLE_COLUMNS` | The Neural Brain needs live per-neuron numbers and per-stream status; data-quality results must be stored and shown |
 | 2026-10-07 | Appended `FATIGUE_FREQ_UP`, `FATIGUE_CTR_DOWN`, `CPC_SPIKE_MIN`, `SKU_RECENT_DAYS`, `SKU_BASELINE_DAYS`, `PROFIT_BASE_FLOOR`, `MAD_SCALE` to `config.py` | M3 detectors need shared, documented thresholds (fatigue, CPC spike, 14/28-day site-conversion windows, robust-z scaling) so no module hard-codes them |
+| 2026-10-07 | Appended `OPP_TEST_BUDGET`, `OPP_TOP_N`, `OPP_GHOST_N`, `RIDGE_ALPHA`, `CV_FOLDS`, `STOCK_FACTOR_PIVOT`, `STOCK_FACTOR_MIN`, `STOCK_FACTOR_MAX`, `HEADROOM_SCALE_POAS`, `HEADROOM_CUT_POAS` to `config.py`; added `curves`, `budget_plans`, `plan_summaries`, `opportunities`, `model_metrics` to `db.TABLE_COLUMNS` | M5b scores untested combinations before any spend and M5 persists curves, plans and model honesty metrics in brain-ready form for M6 / M9 / M10 |
 | 2026-10-07 | Appended `CURVE_POINTS`, `CURVE_B_MIN_MULT`, `CURVE_B_MAX_MULT`, `SATURATION_MULT`, `OPTIMIZER_MAX_ITER`, `OVERSTOCK_COVER_DAYS`, `OVERSTOCK_UPPER_MULT`, `CLEAR_INV_PIVOT_DAYS`, `CLEAR_INV_MAX_BONUS`, `LAUNCH_TEST_RESERVE`, `SIMULATE_MAX_MS` to `config.py` | M5 fits response curves, solves the budget allocation under guardrails and four objectives, and simulates what-ifs; none of these knobs may be hard-coded in the optimizer |
 | 2026-10-07 | Appended `CAUSAL_CHART_DAYS`, `CAUSAL_CI_Z`, `CAUSAL_MIN_PRE_DAYS` to `config.py`; added `diagnoses`, `causal_results` to `db.TABLE_COLUMNS`; added `active_diagnoses` to `default_state()` (old state files gain it via `load_state`) | M4 persists root-cause waterfalls and M4b persists synthetic-control results; diagnosis pulses are deduplicated against the last pulse's signature |
 | 2026-10-07 | Appended `CHANNEL_DISPLAY` to `config.py` (meta → "Meta", tiktok → "TikTok", …) | `str.title()` produced "Tiktok" in campaign names and alert labels; every label in M1/M2/M3 now uses one shared display map |
@@ -304,6 +305,9 @@ _(Team: add assumptions here as they are made.)_
 - **M2 `change_pct` sign:** measured against |previous| (still via M0 `change_pct`), so a deepening loss reads as negative. With a plain recent ÷ previous − 1, CMP-01 (−₹43.0k → −₹45.6k/day, a worse loss) would show as +6%.
 - **M4b CI scale:** `CausalResult.ci_low` / `ci_high` are the 95% interval on `total_effect` (₹ over the post-period), per the M4b formula, although M0's schema comment says ₹/day. The validation check "ci_low < effect < ci_high" therefore compares against `total_effect`.
 - **M4b EV-2 result:** units −21.8% vs counterfactual (the spec expected ≈ −25%; the price elasticity alone implies −29.5%), net margin +₹2.1k/day with a 95% interval that includes zero. Reported, not tuned.
+- **M5 stock guard vs the ±50% cap:** the M0 rule "campaigns on SKUs under 7 days of cover are capped at 40% of current spend" forces Running Pro's three campaigns to −60%, past `DAILY_CHANGE_CAP`. The guard is the deliberate exception; the validator allows it and still requires every other campaign within ±50%.
+- **M5 revenue_target:** with Running Pro forced down, revenue *falls* (−₹72.9k/day) rather than rising; the objective holds profit (+₹82) and minimises the revenue loss. The profit floor carries a small rounding buffer.
+- **M5b R² holdout** is 0.20 (spec expected ≈ 0.16): folds range from −0.14 to 0.69, so it is a ranking signal only. Reported, not tuned.
 - **M1 weekly budget tests** use calendar weeks (Monday–Sunday) for the first 55 days; the last 35 days run at budget so detection baselines are clean.
 
 ## 13. Common mistakes
@@ -820,6 +824,137 @@ A before/after comparison cannot tell a price change from everything else that m
 - **Causal proof pulse**: one extra `diagnosis` event on the treated SKU (`ref_id` = the event id, severity medium): "Causal proof · Casual X price rise: units −22% vs counterfactual, net margin ₹2.1k/day (95% CI includes zero)", with `{event_id, effect_per_day, total_effect, ci_low, ci_high, units_change_pct}`. The message says "includes zero" only when it does.
 - **Dedupe**: a diagnosis pulses only when its key is new in `state["active_diagnoses"]` or its signature (`top_factor|total_change rounded to ₹100`) changed; the causal pulse uses the key `causal:<event_id>`. Keys that stop appearing are dropped. `emit_brain_events=False` logs nothing and leaves state untouched.
 - **Tables**: `diagnoses` (one row per anomaly, with factors / funnel / related as JSON and `causal_event_id`) and `causal_results` (effect, interval, controls, weights and the chart series).
+
+---
+
+# Module 5 — Optimizer & Simulator (+ M5b Opportunity Scorer)
+
+> **Pitch line:** "Every campaign gets a profit curve. Where the next rupee returns more than a rupee we scale; where it doesn't, we cut — turning ₹51.7k/day of losses into ₹22.6k/day of profit, never touching products about to sell out. And we predict winners before spending a rupee."
+
+M5 is the first half of the Neural Brain's **Decide lobe**: it finds where the next rupee earns the most. It learns how gross margin responds to spend for every campaign, reallocates budget under guardrails for four business objectives, and simulates any what-if. M5b scores product × channel × audience combinations that have **never** been funded.
+
+```bash
+python -m backend.optimizer.optimize    # curves, the 4 objectives, the max_profit plan, Google +20% simulation
+python -m backend.optimizer.runner      # all of the above + opportunities, persisted as brain-ready tables
+python -m backend.optimizer.validate    # 16-point PASS / WARN / FAIL table
+python -m pytest -q                     # M0–M5 tests (temp folders only)
+```
+
+## Response curves (`curves.py`)
+
+```
+GM(s) = a · s ÷ (b + s)            a = most gross margin per day the campaign can make; b = spend that reaches half of a
+marginal POAS(s) = a·b ÷ (b + s)²  > 1: scaling adds profit · < 1: the next rupee loses money
+profit(s) = GM(s) − s               peaks where marginal POAS = 1, at s* = √(a·b) − b
+```
+
+- **Fit**: `scipy.optimize.curve_fit` on all 90 daily (spend, margin) points per campaign, with bounds (b between 5% and 50× mean spend). M1's weekly ±40% budget tests (first 55 days) spread each campaign's spend over a range, which is what makes `b` learnable; a campaign that always spent the same amount could not reveal its saturation.
+- **Re-anchoring: "shape from history, level from now."** `a` is rescaled so the curve passes exactly through the last 7 days' average margin at the last 7 days' average spend: `a = gm_7d × (b + s_7d) ÷ s_7d`. The 90-day history teaches *how fast returns diminish*; the last 7 days set *where the campaign is now*, which captures creative fatigue and the Google CPC spike.
+- **Uncertainty** = relative standard error of `b` from the fit covariance (clipped to [0, 2]). `current_spend` is the executed budget from `state.budget_overrides` if present, else the last-7-day average. Fitted curves are cached in memory (invalidated when the database or state changes), so the simulator answers in about a millisecond.
+
+| Campaign | Current ₹/day | Marginal POAS | Saturation | Optimal | Headroom |
+|---|---|---|---|---|---|
+| CMP-01 Meta · Summer Sneakers · broad | ₹50.3k | 0.02 | ₹54.3k | ₹0 | cut |
+| CMP-02 Google · Summer Sneakers · interest | ₹25.3k | 0.12 | ₹1.15L | ₹0 | cut |
+| CMP-03 Meta · Running Pro · lookalike | ₹40.0k | 0.72 | ₹1.37L | ₹27.1k | locked |
+| CMP-04 Google · Running Pro · interest | ₹29.3k | 0.46 | ₹89.7k | ₹10.3k | locked |
+| CMP-05 Amazon · Running Pro · retargeting | ₹19.9k | 1.09 | ₹54.8k | ₹21.6k | locked |
+| CMP-06 Google · Trail Max · interest | ₹8.1k | 1.05 | ₹32.3k | ₹8.5k | hold |
+| CMP-07 Meta · Trail Max · lookalike | ₹5.9k | 1.59 | ₹77.7k | ₹14.2k | **scale** |
+| CMP-08 Meta · Casual X · broad | ₹25.3k | 0.16 | ₹66.2k | ₹0 | cut |
+| CMP-09 Amazon · Casual X · interest | ₹14.8k | 0.24 | ₹37.4k | ₹957 | cut |
+| CMP-10 TikTok · Gym Flex · broad | ₹15.2k | 1.50 | ₹2.68L | ₹38.7k | **scale** |
+| CMP-11 TikTok · Slide Comfort · interest | ₹10.0k | 0.04 | ₹5.0k | ₹700 | cut |
+| CMP-12 Programmatic · Office Loafer · broad | ₹18.2k | 0.09 | ₹28.3k | ₹0 | cut |
+| CMP-13 Amazon · Hiking Boot · interest | ₹14.8k | 0.61 | ₹26.4k | ₹9.6k | cut |
+| CMP-14 Meta · Kids Glow · retargeting | ₹8.1k | 0.84 | ₹61.0k | ₹5.7k | cut |
+| CMP-15 Google · Sock Pack · interest | ₹6.1k | 0.11 | ₹58.4k | ₹0 | cut |
+| CMP-16 Programmatic · Summer Sneakers · retargeting | ₹10.1k | 0.07 | ₹13.1k | ₹0 | cut |
+
+Headroom (from marginal POAS: > 1.1 scale, < 0.9 cut, otherwise hold; stock-guarded campaigns are always "locked"): **2 scale · 1 hold · 10 cut · 3 locked**. Note that profitable campaigns can still be past their optimum (CMP-13 earns POAS 1.4 on average but only 0.61 on the *next* rupee): average and marginal returns are different things.
+
+## Optimizer (`optimize.py`)
+
+**Variables**: the daily spend of each of the 16 campaigns. **Bounds per campaign**:
+
+| Bound | Rule |
+|---|---|
+| change cap | `[current × (1 − 50%), current × (1 + 50%)]` (`DAILY_CHANGE_CAP`) |
+| stock guard | SKU cover < 7 days: `hi = min(hi, current × 40%)` and `lo = min(lo, hi)`: increases are blocked and spend is held at the 40% cap (`STOCK_SPEND_CAP_MULT`) |
+| overstock boost | `clear_inventory` only: cover > 60 days → `hi = current × 2` |
+
+Shared constraint: Σ spend ≤ budget (default: today's total); under-spending is allowed when extra money would lose profit. **Solver**: scipy SLSQP on spend ÷ current (well scaled), analytic gradients, one retry from the bounds midpoint, then a best feasible point with `solver.ok = false`. Plans are rounded to ₹10 inside the bounds. A budget below the minimum reachable spend (the lower bounds sum to about ₹1.42L) is reported as `infeasible` instead of silently overspending.
+
+| Objective | Maximise | Notes |
+|---|---|---|
+| max_profit | Σ (GM − spend) | |
+| revenue_target | Σ rev_per_gm × GM | subject to total profit ≥ today's (with a rounding buffer; or the best achievable if guards make that impossible) |
+| clear_inventory | Σ (wᵢ × GM − spend), wᵢ = 1 + clip((cover − 30) ÷ 30, 0, 1.5) | overstocked SKUs get a weight bonus and may grow to 2× |
+| launch_sku | max_profit on 95% of the budget | 5% reserved for M5b test budgets |
+
+**Results of this run** (per day; current: spend ₹3.02L, revenue ₹6.21L, profit **−₹51.7k**, POAS 0.83):
+
+| Objective | Spend | Revenue | Profit | POAS | Profit Δ | Solver |
+|---|---|---|---|---|---|---|
+| max_profit | ₹1.71L | ₹4.71L | **+₹22.6k** | 1.13 | **+₹74.3k** | ok |
+| revenue_target | ₹2.74L | ₹5.48L | −₹51.6k | 0.81 | +₹82 | ok |
+| clear_inventory | ₹1.86L | ₹4.92L | +₹19.0k | 1.10 | +₹70.7k | ok |
+| launch_sku | ₹1.71L | ₹4.71L | +₹22.6k | 1.13 | +₹74.3k | ok (₹15.1k reserved) |
+
+**Headline**: max_profit turns **−₹51.7k/day into +₹22.6k/day (+₹74.3k/day)** by halving the loss-makers (Summer Sneakers, Casual X, programmatic, TikTok Slide Comfort, Google Sock Pack), scaling Trail Max on Meta (+50%) and Gym Flex (+50%), and holding Google Trail Max. Things to know:
+- **Stock guard forces −60%** on Running Pro (CMP-03/04/05): by the rule above the spend is held at 40% of current, which is beyond the ±50% cap. It is the one deliberate exception (marked `stock_guard`); no plan ever raises spend on a low-stock SKU.
+- **Cutting costs revenue**: max_profit gives up ₹1.50L/day of revenue (−24%) to gain profit. revenue_target keeps profit where it is and loses *less* revenue (−₹72.9k) because the forced Running Pro cut cannot be offset elsewhere within the ±50% caps.
+- **clear_inventory** doubles Kids Glow (CMP-14, 77 days of cover) to ₹16.3k/day versus ₹5.7k under max_profit.
+
+## Simulator
+
+`simulate({campaign_id: spend})` applies any plan (unlisted campaigns keep their spend) and returns per-campaign and total spend, margin, revenue, profit, marginal POAS, and a `stock_warning` when a plan raises spend on a SKU with < 7 days of cover. `channel_simulate({"google": 1.2})` scales a whole channel first. Both answer in about **1 ms** (limit 300 ms). **Google +20%** costs **₹13.8k/day more spend and reduces profit by ₹9.1k/day**: Google is past saturation while the competitor CPC spike lasts, so the next rupee returns less than a rupee.
+
+## M5b: scoring combinations before any spend (`opportunity.py`)
+
+```
+log(orders per ₹1,000) = β·log(spend) + γ·rating + channel effect + audience effect       (Ridge regression, α = 1)
+```
+
+- **Why log-additive**: effects multiply on the real scale (a better audience times a better channel), and `exp()` guarantees a prediction can never go negative. The target is `log((orders + 0.5) ÷ spend × 1000)` (the 0.5 avoids log 0 and is subtracted back out of the prediction).
+- **Why attributes, not IDs**: the features are log spend, product rating, and one-hot channel and audience. SKU ids would make the model memorise campaigns and be useless on a combination it has never seen.
+- **Why Ridge**: 16 campaigns and 11 correlated features invite over-fitting; the L2 penalty keeps the effects sensible. Coefficients: log spend −0.19 (diminishing returns), rating +0.73, retargeting +0.58, Google +0.32, programmatic −0.67, broad −0.42.
+- **Honest validation**: `GroupKFold(4)` grouped by campaign holds out *whole campaigns*, which is exactly the "never seen before" case (a random KFold would leak campaign identity and flatter the score; a test proves it does). **R² holdout = 0.20** (folds 0.02, −0.14, 0.24, 0.69). That is low and noisy by design: this is a **ranking signal for where to test first, not a forecast**. The Opportunities panel shows this number as an honesty badge.
+- **Scoring**: (1) every SKU × channel × audience combination not in `dim_campaign`; (2) predict orders per ₹1k at a ₹5,000/day test budget; (3) `predicted_poas = orders per ₹1k ÷ 1000 × unit margin`; (4) stock factor `0` if cover < 7 days else `clip(cover ÷ 30, 0.5, 1.5)`; (5) `score = predicted_poas × stock factor`, drop zeros, keep the best audience per SKU × channel; (6) rank, top 10, top 5 are ghosts.
+
+| # | Opportunity | Orders per ₹1k | Predicted POAS | Stock days | Score | Ghost |
+|---|---|---|---|---|---|---|
+| 1 | Trail Max · Google · retargeting | 2.47 | 5.55 | 49 | 8.32 | ● |
+| 2 | Trail Max · TikTok · retargeting | 2.15 | 4.82 | 49 | 7.24 | ● |
+| 3 | Trail Max · Amazon · retargeting | 1.94 | 4.35 | 49 | 6.53 | ● |
+| 4 | Trail Max · Meta · retargeting | 1.91 | 4.31 | 49 | 6.46 | ● |
+| 5 | Gym Flex · Google · retargeting | 2.29 | 2.97 | 33 | 3.28 | ● |
+| 6 | Hiking Boot · Google · retargeting | 2.12 | 4.66 | 20 | 3.10 | |
+| 7 | Trail Max · Programmatic · retargeting | 0.85 | 1.91 | 49 | 2.87 | |
+| 8 | Gym Flex · TikTok · retargeting | 1.99 | 2.58 | 33 | 2.85 | |
+| 9 | Hiking Boot · TikTok · retargeting | 1.84 | 4.05 | 20 | 2.70 | |
+| 10 | Gym Flex · Amazon · retargeting | 1.79 | 2.33 | 33 | 2.57 | |
+
+Running Pro never appears (5 days of cover). Every pick is a retargeting audience: that effect dominates the model, which is plausible but is also a reason to treat the ranking as a hypothesis to test, not a certainty.
+
+## ML summary for judges
+
+| Technique | Where | Why it fits |
+|---|---|---|
+| Non-linear regression (curve fitting) | response curves | diminishing returns are non-linear; two parameters per campaign are all 90 days can support |
+| Constrained optimisation (SLSQP) | budget allocation | smooth objective with analytic gradients, box bounds and a budget constraint |
+| Ridge regression + group cross-validation | opportunity scorer | tiny data, correlated features, and validation that holds out whole campaigns |
+
+## Neural Brain integration
+
+M5 writes `curves`, `budget_plans`, `plan_summaries`, `opportunities` and `model_metrics`; the brain (via M9) renders them:
+- **`curves.headroom`**: a halo on campaign neurons: *scale* = outward glow, *cut* = dim inward ring, *hold* = none, *locked* = lock icon.
+- **`budget_plans`** (the objective chosen in settings, default max_profit): planned-change arrows on neurons from `change_pct`.
+- **`opportunities` where `is_ghost`**: dashed **ghost neurons** in the cluster for their channel, linked by a dashed synapse to the SKU neuron and showing `predicted_poas`.
+- **`plan_summaries`**: the before / after headline ("−₹51.7k/day → +₹22.6k/day").
+- **`model_metrics.r2_holdout`**: the honesty badge on the Opportunities panel.
+
+**M5 emits no brain events, by design.** It produces analysis; **M6** turns the max_profit plan, the opportunities and the anomalies into Recommendations and emits the `recommendation` pulses into the Decide lobe. (A test confirms M5 never touches `state.json`.)
 
 ---
 

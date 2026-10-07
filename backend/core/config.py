@@ -211,3 +211,17 @@ CLEAR_INV_PIVOT_DAYS = 30  # clear_inventory weight = 1 + clip((cover − 30)/30
 CLEAR_INV_MAX_BONUS = 1.5  # ... capped at this bonus
 LAUNCH_TEST_RESERVE = 0.05  # launch_sku: 5% of budget reserved for M5b tests
 SIMULATE_MAX_MS = 300  # simulator must answer within 300 ms
+
+# ---------------------------------------------------------------------------
+# 2.14 Opportunity scorer and headroom (added for M5b, additive)
+# ---------------------------------------------------------------------------
+OPP_TEST_BUDGET = 5000  # ₹/day test budget used to score untested combos
+OPP_TOP_N = 10  # opportunities kept
+OPP_GHOST_N = 5  # top opportunities shown as ghost neurons in the brain
+RIDGE_ALPHA = 1.0  # Ridge regularisation strength
+CV_FOLDS = 4  # GroupKFold folds (grouped by campaign)
+STOCK_FACTOR_PIVOT = 30  # stock factor = clip(cover/30, 0.5, 1.5); 0 if cover < STOCK_COVER_RISK_DAYS
+STOCK_FACTOR_MIN = 0.5  # ... lower clip
+STOCK_FACTOR_MAX = 1.5  # ... upper clip
+HEADROOM_SCALE_POAS = 1.1  # marginal POAS above this → "scale"
+HEADROOM_CUT_POAS = 0.9  # below this → "cut"; between → "hold"

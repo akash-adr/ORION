@@ -87,6 +87,29 @@ TABLE_COLUMNS: dict[str, list[str]] = {
         "event_id", "description", "treated_sku", "method", "effect_per_day", "total_effect", "ci_low", "ci_high",
         "units_change_pct", "pre_fit_rmse", "controls_json", "weights_json", "series_json", "computed_at",
     ],
+    # --- added for M5 / M5b (additive): response curves, budget plans, opportunities and model honesty ---
+    "curves": [  # one row per campaign
+        "campaign_id", "channel", "sku_id", "audience", "name", "a", "b", "rev_per_gm", "current_spend", "days_cover",
+        "uncertainty", "marginal_poas", "saturation_spend", "optimal_spend", "gm_7d", "spend_7d", "fit_ok", "flags",
+        "headroom", "points_json", "fitted_at",
+    ],
+    "budget_plans": [  # one row per objective × campaign
+        "objective", "campaign_id", "current_spend", "planned_spend", "change_pct", "current_profit", "planned_profit",
+        "marginal_poas_current", "marginal_poas_planned", "bound_reasons", "stock_locked", "solver_ok", "planned_at",
+    ],
+    "plan_summaries": [  # one row per objective
+        "objective", "current_spend", "planned_spend", "current_profit", "planned_profit", "profit_delta",
+        "current_revenue", "planned_revenue", "revenue_delta", "current_poas", "planned_poas", "reserved_test_budget",
+        "solver_ok", "planned_at",
+    ],
+    "opportunities": [  # untested SKU × channel × audience combos, ranked
+        "rank", "sku_id", "sku_name", "channel", "audience", "cluster", "predicted_conv_per_1k", "predicted_poas",
+        "unit_margin", "stock_days", "stock_factor", "score", "test_budget", "is_ghost", "label", "scored_at",
+    ],
+    "model_metrics": [  # honest model validation
+        "model", "target", "n_rows", "n_features", "cv", "r2_holdout", "r2_folds_json", "alpha", "features_json",
+        "trained_at",
+    ],
 }
 
 # Raw files written by M1 into config.RAW_DIR

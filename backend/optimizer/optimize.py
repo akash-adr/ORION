@@ -102,10 +102,17 @@ def _solve(objective: str, curves, budget: float, lo: np.ndarray, hi: np.ndarray
     if not res.success:
         res = run((lo + hi) / 2 / cur)  # one retry from the bounds midpoint
     s = np.clip(res.x * cur, lo, hi)
+    info = {"ok": bool(res.success), "iterations": int(res.nit), "message": str(res.message)}
+    if lo.sum() > budget + 1e-6:
+        # No feasible plan: even every campaign at its lower bound (the daily change cap, with the stock guard) spends
+        # more than the budget. Report it; the plan sits at the lower bounds instead of silently pretending to fit.
+        info.update(ok=False, message=f"infeasible: the minimum reachable spend {lo.sum():,.0f} exceeds the budget "
+                                      f"{budget:,.0f} under the daily change cap")
+        return lo.copy(), info
     if s.sum() > budget:  # best feasible point: scale the spend that is above the lower bounds down to the budget
         room = s - lo
         s = lo + room * max(0.0, (budget - lo.sum())) / max(room.sum(), 1e-9)
-    return s, {"ok": bool(res.success), "iterations": int(res.nit), "message": str(res.message)}
+    return s, info
 
 
 def _round_plan(s: np.ndarray, lo: np.ndarray, hi: np.ndarray, budget: float) -> np.ndarray:
